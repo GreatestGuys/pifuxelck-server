@@ -1,11 +1,11 @@
 {-# LANGUAGE OverloadedStrings #-}
 
-import Network.Wai
-import Network.Wai.Handler.Warp
-import Network.HTTP.Types (status200)
 import Blaze.ByteString.Builder (copyByteString)
 import qualified Data.ByteString.UTF8 as BU
 import Data.Monoid
+import Network.HTTP.Types (status200)
+import Network.Wai
+import Network.Wai.Handler.Warp
 
 main = do
   let port = 3000
