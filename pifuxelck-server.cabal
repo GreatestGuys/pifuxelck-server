@@ -27,4 +27,6 @@ executable pifuxelck-server
     , warp >= 3.0.2.3
     , wai >= 3.0.2
   -- hs-source-dirs:      
+  default-extensions:
+      OverloadedStrings
   default-language:    Haskell2010
