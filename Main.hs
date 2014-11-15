@@ -1,7 +1,7 @@
 import Network.Wai (pathInfo)
 import Network.Wai.Handler.Warp
 
-import Server.Endpoint (plainTextResponse)
+import Server.Endpoint (plainTextResponse, respond404)
 
 main = do
   let port = 3000
@@ -13,6 +13,7 @@ app req respond = respond $
     ["inbox"]      -> inbox
     ["newgame"]    -> newgame
     ["newaccount"] -> newaccount
+    _              -> respond404
 
 inbox = plainTextResponse 
       $ [ "This is your inbox.\n"
