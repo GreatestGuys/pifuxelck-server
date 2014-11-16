@@ -20,12 +20,13 @@ executable pifuxelck-server
   -- other-modules:       
   -- other-extensions:    
   build-depends:
-      base >=4.6 && <4.7
-    , utf8-string >= 0.3.8
+      aeson >= 0.8.0.2
+    , base >=4.6 && <4.7
     , blaze-builder >= 0.3.3.4
     , http-types >= 0.8.5
-    , warp >= 3.0.2.3
+    , utf8-string >= 0.3.8
     , wai >= 3.0.2
+    , warp >= 3.0.2.3
   -- hs-source-dirs:      
   default-extensions:
       OverloadedStrings

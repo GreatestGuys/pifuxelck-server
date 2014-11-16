@@ -1,7 +1,7 @@
 import Network.Wai (pathInfo)
 import Network.Wai.Handler.Warp
 
-import Server.Endpoint (plainTextResponse, respond404)
+import Server.Response (jsonResponse, plainTextResponse, respond404)
 
 main = do
   let port = 3000
@@ -21,6 +21,6 @@ inbox = plainTextResponse
         , "but this one is yours."
         ]
 
-newgame = plainTextResponse ["Starting a new game!"]
+newgame = jsonResponse "This is json."
 
 newaccount = plainTextResponse ["Server down for scheduled maintenance."]
