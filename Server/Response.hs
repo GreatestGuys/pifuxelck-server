@@ -12,7 +12,7 @@ import Network.Wai (responseBuilder, Response)
 
 jsonResponse :: String -> Response
 jsonResponse = responseBuilder status200
-               [("Content-Type", "text/plain")]
+               [("Content-Type", "application/json")]
              . copyLazyByteString
              . encode
 
