@@ -1,9 +1,7 @@
-import Blaze.ByteString.Builder (copyByteString)
-import qualified Data.ByteString.UTF8 as BU
-import Data.Monoid
-import Network.HTTP.Types (status200)
-import Network.Wai
+import Network.Wai (pathInfo)
 import Network.Wai.Handler.Warp
+
+import Server.Response (jsonResponse, plainTextResponse, respond404)
 
 main = do
   let port = 3000
@@ -13,27 +11,16 @@ main = do
 app req respond = respond $
   case pathInfo req of
     ["inbox"]      -> inbox
-    ["draw"]       -> draw
-    ["label"]      -> label
+    ["newgame"]    -> newgame
     ["newaccount"] -> newaccount
-    ["contacts"]   -> contacts
+    _              -> respond404
 
-inbox = responseBuilder status200 [("Content-Type", "text/plain")]
-      $ mconcat
-      $ map copyByteString ["inbox", "stuff?"]
+inbox = plainTextResponse 
+      $ [ "This is your inbox.\n"
+        , "There are many like it,\n"
+        , "but this one is yours."
+        ]
 
-draw = responseBuilder status200 [("Content-Type", "text/plain")]
-     $ mconcat
-     $ map copyByteString ["draw"]
+newgame = jsonResponse "This is json."
 
-label = responseBuilder status200 [("Content-Type", "text/plain")]
-      $ mconcat
-      $ map copyByteString ["label"]
-
-newaccount = responseBuilder status200 [("Content-Type", "text/plain")]
-           $ mconcat
-           $ map copyByteString ["newaccount"]
-
-contacts = responseBuilder status200 [("Content-Type", "text/plain")]
-         $ mconcat
-         $ map copyByteString ["contacts yay"]
+newaccount = plainTextResponse ["Server down for scheduled maintenance."]
