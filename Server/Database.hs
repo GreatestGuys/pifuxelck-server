@@ -2,6 +2,7 @@ module Server.Database (
   addAccount
 , connect
 , defaultConnectInfo
+, insertID
 , ConnectInfo(..)
 , Database
 ) where

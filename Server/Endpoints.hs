@@ -41,6 +41,7 @@ newaccount req db = do
   body <- strictRequestBody req
   case decode body :: Maybe Account of
     (Just account) -> addAccount account db
+                   >> insertID db
                   >>= return
                     . plainTextResponse
                     . return
