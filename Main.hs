@@ -1,26 +1,29 @@
-import Network.Wai (pathInfo)
+import Network.Wai (pathInfo, Request, Response)
 import Network.Wai.Handler.Warp
+import System.Environment (getArgs)
 
-import Server.Response (jsonResponse, plainTextResponse, respond404)
+import Server.Database
+import Server.Endpoints (inbox, generic404, newaccount, newgame)
 
+main :: IO ()
 main = do
   let port = 3000
   putStrLn $ "Listening on port " ++ show port
-  run port app
+  (mysql_host:mysql_port:mysql_user:mysql_pass:mysql_db:[]) <- getArgs
+  connection <- connect
+              $ defaultConnectInfo { connectHost = mysql_host
+                                   , connectPort = read mysql_port
+                                   , connectUser = mysql_user
+                                   , connectPassword = mysql_pass
+                                   , connectDatabase = mysql_db
+                                   }
+  run port (app connection)
 
-app req respond = respond $
-  case pathInfo req of
-    ["inbox"]      -> inbox
-    ["newgame"]    -> newgame
-    ["newaccount"] -> newaccount
-    _              -> respond404
-
-inbox = plainTextResponse 
-      $ [ "This is your inbox.\n"
-        , "There are many like it,\n"
-        , "but this one is yours."
-        ]
-
-newgame = jsonResponse "This is json."
-
-newaccount = plainTextResponse ["Server down for scheduled maintenance."]
+app :: Database -> Request -> (Response -> IO b) -> IO b
+app db req respond = do
+  response <- case pathInfo req of
+                ["inbox"]      -> inbox
+                ["newgame"]    -> newgame
+                ["newaccount"] -> newaccount req db
+                _              -> generic404
+  respond response
