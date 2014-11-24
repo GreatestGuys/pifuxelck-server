@@ -44,9 +44,9 @@ sqlCmd_ q conn = execute_ conn q
 addAccount :: Account -> SqlCommand
 addAccount (Account key name Nothing) = 
   sqlCmd
-  "insert into Account (rsa_public_key, display_name) values (?, ?)"
+  "insert into Accounts (rsa_public_key, display_name) values (?, ?)"
   (key, name)
 addAccount (Account key name (Just number)) =
   sqlCmd
-  "insert into Account (rsa_public_key, display_name, hashed_phone_number) values (?, ?, ?)"
+  "insert into Accounts (rsa_public_key, display_name, hashed_phone_number) values (?, ?, ?)"
   (key, name, number)
