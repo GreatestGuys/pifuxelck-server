@@ -6,13 +6,13 @@ module Server.Response (
 ) where
 
 import Blaze.ByteString.Builder (copyByteString, copyLazyByteString)
-import Data.Aeson (encode)
+import Data.Aeson (encode, ToJSON)
 import Data.ByteString (ByteString)
 import Data.Monoid (mconcat)
 import Network.HTTP.Types (status200, status400, status404)
 import Network.Wai (responseBuilder, Response)
 
-jsonResponse :: String -> Response
+jsonResponse :: ToJSON a => a -> Response
 jsonResponse = responseBuilder status200
                [("Content-Type", "application/json")]
              . copyLazyByteString

@@ -29,15 +29,13 @@ sqlQuery q vs conn = query conn q vs
 
 sqlQuery_ :: QueryResults r
           => Query
-          -> Connection
-          -> IO [r]
+          -> SqlQuery [r]
 sqlQuery_ q conn = query_ conn q
 
 sqlCmd :: QueryParams q
        => Query
        -> q
-       -> Connection
-       -> IO Int64
+       -> SqlCommand
 sqlCmd q vs conn = execute conn q vs
 
 sqlCmd_ :: Query -> Connection -> IO Int64

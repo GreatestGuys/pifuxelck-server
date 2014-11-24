@@ -36,6 +36,10 @@ data LoginForm = LoginForm {
   , hashed_phone_number :: Maybe ByteString
 }
 
+-- | This endpoint attempts to parse the request body from a json object
+-- into an Account. If successful it adds the new account information into
+-- the MySQL database and returns in plaintext the newly created account's
+-- unique identifier. On failure it returns a 400."
 newaccount :: Request -> Database -> IO Response
 newaccount req db = do
   body <- strictRequestBody req
@@ -47,4 +51,4 @@ newaccount req db = do
                     . return
                     . pack
                     . show
-    Nothing        -> generic404
+    Nothing        -> return $ respondWith400 "Failed to parse JSON."
