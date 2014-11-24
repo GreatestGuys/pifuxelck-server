@@ -5,8 +5,6 @@ name:                pifuxelck-server
 version:             0.1.0.0
 -- synopsis:            
 description:         Backend server for GreatestGuys pifuxelck game.
--- license:             
-license-file:        LICENSE
 author:              jesse
 maintainer:          number.dot.ten@gmail.com
 -- copyright:           
@@ -16,6 +14,7 @@ extra-source-files:  README.md
 cabal-version:       >=1.10
 
 executable pifuxelck-server
+  ghc-options:         -Wall
   main-is:             Main.hs
   -- other-modules:       
   -- other-extensions:    
@@ -23,7 +22,10 @@ executable pifuxelck-server
       aeson >= 0.8.0.2
     , base >=4.6 && <4.7
     , blaze-builder >= 0.3.3.4
+    , bytestring >= 0.10.4.1
     , http-types >= 0.8.5
+    , mysql-simple >= 0.2.2.4
+    , text >= 1.2.0.0
     , utf8-string >= 0.3.8
     , wai >= 3.0.2
     , warp >= 3.0.2.3
