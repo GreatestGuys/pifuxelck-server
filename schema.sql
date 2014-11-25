@@ -4,7 +4,7 @@
 -- This script will blow away existing tables and create new ones in there
 -- place. To use:
 --
---    mysql -h $HOST -user $USER --password $DB < schema.sql
+--    mysql -h $HOST -u $USER --password $DB < schema.sql
 
 
 DROP TABLE IF EXISTS `Accounts`;
