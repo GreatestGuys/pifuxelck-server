@@ -42,11 +42,13 @@ sqlCmd_ :: Query -> Connection -> IO Int64
 sqlCmd_ q conn = execute_ conn q
 
 addAccount :: Account -> SqlCommand
-addAccount (Account key name Nothing) = 
-  sqlCmd
-  "insert into Accounts (rsa_public_key, display_name) values (?, ?)"
-  (key, name)
-addAccount (Account key name (Just number)) =
-  sqlCmd
-  "insert into Accounts (rsa_public_key, display_name, hashed_phone_number) values (?, ?, ?)"
-  (key, name, number)
+addAccount (Account exponent modulus name Nothing) = sqlCmd
+    "insert into Accounts \
+        \(key_exponent, key_modulus, display_name) \
+        \values (?, ?, ?)"
+    (exponent, modulus, name)
+addAccount (Account exponent modulus name (Just number)) = sqlCmd
+    "insert into Accounts \
+        \(key_exponent, key_modulus, display_name, hashed_phone_number) \
+        \values (?, ?, ?, ?)"
+    (exponent, modulus, name, number)

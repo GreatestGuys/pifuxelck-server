@@ -16,7 +16,7 @@ import Network.Wai (strictRequestBody, Request, Response)
 
 inbox :: IO Response
 inbox = return
-      . plainTextResponse 
+      . plainTextResponse
       $ [ "This is your inbox.\n"
         , "There are many like it,\n"
         , "but this one is yours."
@@ -43,6 +43,7 @@ data LoginForm = LoginForm {
 newaccount :: Request -> Database -> IO Response
 newaccount req db = do
   body <- strictRequestBody req
+  print body
   case decode body :: Maybe Account of
     (Just account) -> addAccount account db
                    >> insertID db

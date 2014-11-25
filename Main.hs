@@ -7,7 +7,7 @@ import Server.Endpoints (inbox, generic404, newaccount, newgame)
 
 main :: IO ()
 main = do
-  let port = 3000
+  let port = 4242
   putStrLn $ "Listening on port " ++ show port
   (mysql_host:mysql_port:mysql_user:mysql_pass:mysql_db:[]) <- getArgs
   connection <- connect
@@ -22,8 +22,8 @@ main = do
 app :: Database -> Request -> (Response -> IO b) -> IO b
 app db req respond = do
   response <- case pathInfo req of
-                ["inbox"]      -> inbox
-                ["newgame"]    -> newgame
-                ["newaccount"] -> newaccount req db
-                _              -> generic404
+                ["inbox"]   -> inbox
+                ["newgame"] -> newgame
+                ["account"] -> newaccount req db
+                _           -> generic404
   respond response
