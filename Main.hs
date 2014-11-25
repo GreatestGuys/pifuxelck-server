@@ -7,7 +7,7 @@ import Server.Endpoints (inbox, generic404, newaccount, newgame)
 
 main :: IO ()
 main = do
-  let port = 4242
+  let port = 3000
   putStrLn $ "Listening on port " ++ show port
   (mysql_host:mysql_port:mysql_user:mysql_pass:mysql_db:[]) <- getArgs
   connection <- connect
