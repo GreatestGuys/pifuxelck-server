@@ -13,6 +13,6 @@ CREATE TABLE `Accounts` (
   `key_exponent`        blob        NOT NULL,
   `key_modulus`         blob        NOT NULL,
   `display_name`        varchar(32) NOT NULL,
-  `hashed_phone_number` char(64)    NOT NULL,
+  `hashed_phone_number` char(64),
   PRIMARY KEY (`id`)
 );
