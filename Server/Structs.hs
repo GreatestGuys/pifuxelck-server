@@ -10,6 +10,7 @@ import Data.ByteString.Base64.URL (decodeLenient)
 import Data.Text (Text)
 import Data.Text.Encoding (encodeUtf8)
 
+
 data Account = Account {
     exponent          :: Integer
   , modulus           :: Integer
@@ -26,7 +27,7 @@ instance FromJSON Account where
   parseJSON _          = mzero
 
 base64ToInteger :: Text -> Integer
-base64ToInteger = foldl (\a b -> a * 255 + fromIntegral b) 0
+base64ToInteger = foldl (\a b -> a * 256 + fromIntegral b) 0
     . unpack        -- ByteString -> Word8
     . decodeLenient -- ByteString -> ByteString
     . encodeUtf8    -- Text -> ByteString

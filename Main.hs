@@ -7,9 +7,8 @@ import Server.Endpoints (inbox, generic404, newaccount, newgame)
 
 main :: IO ()
 main = do
-  let port = 3000
-  putStrLn $ "Listening on port " ++ show port
-  (mysql_host:mysql_port:mysql_user:mysql_pass:mysql_db:[]) <- getArgs
+  (port:mysql_host:mysql_port:mysql_user:mysql_pass:mysql_db:[]) <- getArgs
+  putStrLn $ "Listening on port " ++ port
   connection <- connect
               $ defaultConnectInfo { connectHost = mysql_host
                                    , connectPort = read mysql_port
@@ -17,7 +16,7 @@ main = do
                                    , connectPassword = mysql_pass
                                    , connectDatabase = mysql_db
                                    }
-  run port (app connection)
+  run (read port) (app connection)
 
 app :: Database -> Request -> (Response -> IO b) -> IO b
 app db req respond = do
