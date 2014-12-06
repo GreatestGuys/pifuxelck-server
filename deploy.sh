@@ -11,6 +11,6 @@ ssh -f $1@everythingissauce.com "sudo killall pifuxelck-server; sudo rm /srv/pif
 
 scp dist/build/pifuxelck-server-deploy/pifuxelck-server-deploy $1@everythingissauce.com:/srv/pifuxelck/pifuxelck-server
 
-ssh -f $1@everythingissauce.com "sudo chown pifuxelck:pifuxelck /srv/pifuxelck/pifuxelck-server; sudo nohup /srv/pifuxelck/pifuxelck-server db.everythingissauce.com 3306 pifuxelck $2 pifuxelck"
+ssh -f $1@everythingissauce.com "sudo chown pifuxelck:pifuxelck /srv/pifuxelck/pifuxelck-server; sudo nohup /srv/pifuxelck/pifuxelck-server 3000 db.everythingissauce.com 3306 pifuxelck $2 pifuxelck"
 
 exit 0
