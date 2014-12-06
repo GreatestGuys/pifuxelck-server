@@ -1,7 +1,9 @@
+{-# LANGUAGE RecordWildCards #-}
 import Control.Applicative
 import Network.Wai (pathInfo, Request, Response)
 import Network.Wai.Handler.Warp
 import System.Environment (getArgs)
+import Options.Applicative
 
 import Server.Database
 import Server.Endpoints (inbox, generic404, newaccount, newgame)
@@ -12,26 +14,66 @@ import qualified System.Log.Logger as Log
 import qualified System.Log.Formatter as Log
 import qualified System.Log.Handler as Log (setFormatter)
 
+
+data Options = Options {
+    mysqlHost     :: String
+,   mysqlPort     :: Int
+,   mysqlUser     :: String
+,   mysqlPassword :: String
+,   mysqlDb       :: String
+,   port          :: Int
+,   debugMode     :: Bool
+}
+
+optionsParser :: Parser Options
+optionsParser = Options
+    <$> strOption (long "mysql-host"
+        <> metavar "HOST"
+        <> help "The MySQL host of the server.")
+    <*> option auto (long "mysql-port"
+        <> metavar "PORT"
+        <> help "The port that the MySQL server is listening on.")
+    <*> strOption (long "mysql-user"
+        <> metavar "USER"
+        <> help "The username to use when connecting to the MySQL server.")
+    <*> strOption (long "mysql-password"
+        <> metavar "PASSWORD"
+        <> help "The password to use when connecting to the MySQL server.")
+    <*> strOption (long "mysql-db"
+        <> metavar "DATABASE"
+        <> help "The MySQL database containing the pifxuelck data.")
+    <*> option auto (long "port"
+        <> metavar "PORT"
+        <> help "The port to listen on.")
+    <*> switch (long "debug" <> help "Whether to enable debug logging." )
+
 main :: IO ()
-main = do
-    let log = "Main.main"
-    initLogging
+main = execParser opts >>= startServer
+    where
+        opts = info (helper <*> optionsParser) (fullDesc
+            <> progDesc "Run the Pifuxel server"
+            <> header "pifuxelck-server - \
+                \A server enabling inappropriate drawings.")
+
+startServer :: Options -> IO ()
+startServer Options{..} = do
+    let log = "Main.startServer"
+    initLogging debugMode
     Log.infoM log "Booting."
-    (port:mysql_host:mysql_port:mysql_user:mysql_pass:mysql_db:[]) <- getArgs
     Log.infoM log "Connecting to MySQL server:"
-    Log.infoM log $ "\tHost = " ++ mysql_host
-    Log.infoM log $ "\tPort = " ++ mysql_port
-    Log.infoM log $ "\tUser = " ++ mysql_user
-    Log.infoM log $ "\tDB = " ++ mysql_db
+    Log.infoM log $ "\tHost = " ++ mysqlHost
+    Log.infoM log $ "\tPort = " ++ show mysqlPort
+    Log.infoM log $ "\tUser = " ++ mysqlUser
+    Log.infoM log $ "\tDB = " ++ mysqlDb
     connection <- connect
-                $ defaultConnectInfo { connectHost = mysql_host
-                                     , connectPort = read mysql_port
-                                     , connectUser = mysql_user
-                                     , connectPassword = mysql_pass
-                                     , connectDatabase = mysql_db
+                $ defaultConnectInfo { connectHost = mysqlHost
+                                     , connectPort = fromIntegral $ mysqlPort
+                                     , connectUser = mysqlUser
+                                     , connectPassword = mysqlPassword
+                                     , connectDatabase = mysqlDb
                                      }
-    Log.infoM log $ "Listening on port " ++ port ++ "."
-    run (read port) (app connection)
+    Log.infoM log $ "Listening on port " ++ show port ++ "."
+    run port (app connection)
 
 app :: Database -> Request -> (Response -> IO b) -> IO b
 app db req respond = do
@@ -48,20 +90,21 @@ app db req respond = do
 
 -- | Setup logging to STDERR, and two output files, a noisy one containing all
 -- INFO messages and above and one containing just errors.
-initLogging :: IO ()
-initLogging = do
-    streamHandler <- withFormatter <$> Log.streamHandler IO.stderr Log.INFO
+initLogging :: Bool -> IO ()
+initLogging debugMode = do
+    let stderrLevel = if debugMode then Log.DEBUG else Log.INFO
+    streamHandler <- withFormatter <$> Log.streamHandler IO.stderr stderrLevel
+    debugFileLogHandler <- withFormatter <$> Log.fileHandler "DEBUG" Log.DEBUG
     infoFileLogHandler <- withFormatter <$> Log.fileHandler "INFO" Log.INFO
     warnFileLogHandler <- withFormatter <$> Log.fileHandler "ERRORS" Log.WARNING
-    Log.updateGlobalLogger Log.rootLoggerName (Log.setLevel Log.INFO)
-    Log.updateGlobalLogger Log.rootLoggerName (Log.setHandlers [
+    Log.updateGlobalLogger Log.rootLoggerName (Log.setLevel stderrLevel)
+    Log.updateGlobalLogger Log.rootLoggerName (Log.setHandlers ([
             streamHandler
         ,   infoFileLogHandler
         ,   warnFileLogHandler
-        ])
+        ] ++ (if debugMode then [debugFileLogHandler] else [])))
     where
         withFormatter :: Log.GenericHandler IO.Handle
                       -> Log.GenericHandler IO.Handle
         withFormatter = flip Log.setFormatter formatter
         formatter = Log.simpleLogFormatter "[$time $loggername $prio] $msg"
-
