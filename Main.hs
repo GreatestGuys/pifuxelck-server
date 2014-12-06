@@ -1,9 +1,17 @@
+module Main (
+    main
+) where
+
+import Server.Database
+import Server.Endpoints
+
 import Network.Wai (pathInfo, Request, Response)
 import Network.Wai.Handler.Warp
 import System.Environment (getArgs)
 
-import Server.Database
-import Server.Endpoints (inbox, generic404, newaccount, newgame)
+import qualified Data.Text as T
+import qualified Data.Text.Read as T
+
 
 main :: IO ()
 main = do
@@ -20,9 +28,15 @@ main = do
 
 app :: Database -> Request -> (Response -> IO b) -> IO b
 app db req respond = do
-  response <- case pathInfo req of
-                ["inbox"]   -> inbox
-                ["newgame"] -> newgame
-                ["account"] -> newaccount req db
-                _           -> generic404
-  respond response
+    response <- case pathInfo req of
+        ["inbox"]                                    -> inbox req db
+        ["newgame"]                                  -> newgame req db
+        ["account"]                                  -> newaccount req db
+        ["login", "0", id] | Just id' <- textToId id -> loginRequest id' req db
+        ["login", "1", id] | Just id' <- textToId id -> loginRespond id' req db
+        _                                            -> generic404
+    respond response
+
+textToId :: T.Text -> Maybe ID
+textToId text | Left  _       <- T.decimal text = Nothing
+              | Right (id, _) <- T.decimal text = Just id

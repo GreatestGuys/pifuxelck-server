@@ -1,24 +1,42 @@
+{-# LANGUAGE TupleSections #-}
 module Server.Database (
-  addAccount
+  Database
+, ID
+, Sql
+
+, addAccount
+, getAccount
+
+, addChallenge
+, getChallenge
+, deleteChallenge
+
+, addSession
+, accountIdForSession
+
 , connect
 , defaultConnectInfo
-, insertID
 , ConnectInfo(..)
-, Database
 ) where
 
 import Server.Structs
+import Server.Encoding
 
+import Control.Applicative
 import Control.Monad
+import Control.Monad.Trans.Class
+import Control.Monad.Trans.Maybe
 import Data.Bits ((.&.))
+import Data.Maybe
+import Data.Time.Clock.POSIX
 import Data.Word
 import Database.MySQL.Simple
 import Database.MySQL.Simple.QueryParams
 import Database.MySQL.Simple.QueryResults
 
-import qualified Data.Binary as Binary
 import qualified Data.ByteString as BS
-import qualified Data.ByteString.Lazy as LBS
+import qualified Data.Text as T
+
 
 type ID = Word64
 
@@ -46,24 +64,83 @@ sqlCmd q vs conn = void $ execute conn q vs
 sqlCmd_ :: Query -> Sql ()
 sqlCmd_ q conn = void $ execute_ conn q
 
+--------------------------------------------------------------------------------
+-- Login CRUD
+
+addChallenge :: ID -> BS.ByteString -> Sql ID
+addChallenge userId challenge connection = do
+    timestamp <- round <$> getPOSIXTime :: IO Word64
+    sqlCmd query (values timestamp) connection >> insertID connection
+    where
+        query = "INSERT INTO LoginChallenges \
+            \(challenge, account_id, created_at) \
+            \VALUES (?, ?, ?)"
+        values = (challenge, userId,)
+
+getChallenge :: ID -> Sql (Maybe Challenge)
+getChallenge id connection = do
+    let results = listToMaybe <$> sqlQuery query values connection
+    runMaybeT $ do
+        (challenge, userId) <- MaybeT results
+        return $ Challenge challenge userId
+    where
+        query = "SELECT challenge, account_id FROM LoginChallenges WHERE id = ?"
+        values = Only $ id
+
+deleteChallenge :: ID -> Sql ()
+deleteChallenge id =
+    sqlCmd "DELETE FROM LoginChallenges WHERE id = ?" (Only id)
+
+addSession :: ID -> T.Text -> Sql ()
+addSession userId authToken connection = do
+    timestamp <- round <$> getPOSIXTime :: IO Word64
+    sqlCmd query (values timestamp) connection
+    where
+        query = "INSERT INTO Sessions \
+            \(auth_token, account_id, created_at) \
+            \VALUES (?, ?, ?)"
+        values = (authToken, userId,)
+
+accountIdForSession :: T.Text -> Sql (Maybe ID)
+accountIdForSession authToken connection = do
+    maybeIntegerId <- listToMaybe <$> sqlQuery query values connection
+    return $ (fromIntegral . fromOnly :: Only Integer -> ID) <$> maybeIntegerId
+    where
+        query = "SELECT account_id FROM Sessions WHERE auth_token = ?"
+        values = Only $ authToken
+
+--------------------------------------------------------------------------------
+-- Account CRUD
+
 addAccount :: Account -> Sql ID
 addAccount (Account exponent modulus name Nothing) connection =
-        sqlCmd query values connection >> insertID connection
+    sqlCmd query values connection >> insertID connection
     where
         query = "insert into Accounts \
             \(key_exponent, key_modulus, display_name) \
             \values (?, ?, ?)"
         values = (integerToBytes exponent, integerToBytes modulus, name)
 addAccount (Account exponent modulus name (Just number)) connection =
-        sqlCmd query values connection >> insertID connection
+    sqlCmd query values connection >> insertID connection
     where
         query = "insert into Accounts \
             \(key_exponent, key_modulus, display_name, hashed_phone_number) \
             \values (?, ?, ?, ?)"
         values = (integerToBytes exponent, integerToBytes modulus, name, number)
 
-integerToBytes :: Integer -> BS.ByteString
-integerToBytes = LBS.toStrict . Binary.encode
-
-bytesToInteger :: BS.ByteString -> Integer
-bytesToInteger = Binary.decode . LBS.fromStrict
+getAccount :: ID -> Sql (Maybe Account)
+getAccount id connection = do
+    let results = listToMaybe <$> sqlQuery query values connection
+    runMaybeT $ do
+        (exponent, modulus, displayName, phone) <- MaybeT results
+        return $ Account
+            (bytesToInteger exponent)
+            (bytesToInteger modulus)
+            displayName
+            phone
+    where
+        query = "SELECT \
+            \key_exponent, key_modulus, display_name, hashed_phone_number \
+            \FROM Accounts \
+            \WHERE id = ?"
+        values = Only $ show id
