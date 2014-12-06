@@ -9,14 +9,16 @@ import Server.Database
 import Server.Response
 import Server.Structs
 
+import Control.Applicative
 import Data.Aeson (decode)
-import Data.ByteString (ByteString)
-import Data.ByteString.Char8 (pack)
 import Network.Wai (strictRequestBody, Request, Response)
+
+import qualified Data.ByteString as BS
+import qualified Data.ByteString.Char8 as CBS
 
 inbox :: IO Response
 inbox = return
-      . plainTextResponse 
+      . plainTextResponse
       $ [ "This is your inbox.\n"
         , "There are many like it,\n"
         , "but this one is yours."
@@ -31,9 +33,9 @@ newgame = return
         $ plainTextResponse ["Server down for scheduled maintenance."]
 
 data LoginForm = LoginForm {
-    public_key          :: ByteString
-  , display_name        :: ByteString
-  , hashed_phone_number :: Maybe ByteString
+    public_key          :: BS.ByteString
+  , display_name        :: BS.ByteString
+  , hashed_phone_number :: Maybe BS.ByteString
 }
 
 -- | This endpoint attempts to parse the request body from a json object
@@ -42,13 +44,12 @@ data LoginForm = LoginForm {
 -- unique identifier. On failure it returns a 400."
 newaccount :: Request -> Database -> IO Response
 newaccount req db = do
-  body <- strictRequestBody req
-  case decode body :: Maybe Account of
-    (Just account) -> addAccount account db
-                   >> insertID db
-                  >>= return
-                    . plainTextResponse
-                    . return
-                    . pack
-                    . show
-    Nothing        -> return $ respondWith400 "Failed to parse JSON."
+    body <- strictRequestBody req
+    case decode body :: Maybe Account of
+        (Just account) -> idToResponse <$> addAccount account db
+        Nothing        -> return $ respondWith400 "Failed to parse JSON."
+    where
+        idToResponse = plainTextResponse
+            . return    -- ByteString -> [ByteString]
+            . CBS.pack  -- String -> ByteString
+            . show      -- Render the ID as a String.
