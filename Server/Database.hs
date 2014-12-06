@@ -16,7 +16,9 @@ import Database.MySQL.Simple
 import Database.MySQL.Simple.QueryParams
 import Database.MySQL.Simple.QueryResults
 
+import qualified Data.Binary as Binary
 import qualified Data.ByteString as BS
+import qualified Data.ByteString.Lazy as LBS
 
 type ID = Word64
 
@@ -61,12 +63,7 @@ addAccount (Account exponent modulus name (Just number)) connection =
         values = (integerToBytes exponent, integerToBytes modulus, name, number)
 
 integerToBytes :: Integer -> BS.ByteString
-integerToBytes = BS.pack
-    . map (fromIntegral . (.&. 0xFF))
-    . takeWhile (> 0)
-    -- [i / 256^0, i / 256^1, i / 256^2, ...]
-    . zipWith (flip div) (map (256^) [0, 1..])
-    . repeat
+integerToBytes = LBS.toStrict . Binary.encode
 
 bytesToInteger :: BS.ByteString -> Integer
-bytesToInteger = foldl (\a b -> a * 256 + fromIntegral b) 0 . BS.unpack
+bytesToInteger = Binary.decode . LBS.fromStrict
