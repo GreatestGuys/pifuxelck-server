@@ -15,6 +15,7 @@ import Network.Wai (strictRequestBody, Request, Response)
 
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Char8 as CBS
+import qualified System.Log.Logger as Log
 
 inbox :: IO Response
 inbox = return
@@ -44,10 +45,18 @@ data LoginForm = LoginForm {
 -- unique identifier. On failure it returns a 400."
 newaccount :: Request -> Database -> IO Response
 newaccount req db = do
+    let log = "Endpoints.newaccount"
+    Log.infoM log "Processing account creation request."
     body <- strictRequestBody req
     case decode body :: Maybe Account of
-        (Just account) -> idToResponse <$> addAccount account db
-        Nothing        -> return $ respondWith400 "Failed to parse JSON."
+        (Just account) -> do
+            accountId <- addAccount account db
+            Log.infoM log $ "Created account: " ++ show accountId
+            return $ idToResponse accountId
+        Nothing        -> do
+            Log.warningM log $ "Account not created; invalid JSON request."
+            Log.debugM log $ "\tRequest: " ++ show body
+            return $ respondWith400 "Failed to parse JSON."
     where
         idToResponse = plainTextResponse
             . return    -- ByteString -> [ByteString]
