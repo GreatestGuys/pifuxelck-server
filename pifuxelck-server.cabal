@@ -27,6 +27,7 @@ executable pifuxelck-server
     , bytestring >= 0.10.4.1
     , case-insensitive >= 1.2
     , crypto-api >= 0.13
+    , hslogger >= 1.2
     , http-types >= 0.8.5
     , mysql-simple >= 0.2.2.4
     , text >= 1.2.0.0

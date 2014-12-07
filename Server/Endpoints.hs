@@ -24,6 +24,7 @@ import qualified Crypto.Random.DRBG as DRBG
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Char8 as CBS
 import qualified Data.Text.Encoding as T
+import qualified System.Log.Logger as Log
 
 
 -- | A utility function that will attempt to parse a JSON object out of the body
@@ -32,8 +33,15 @@ import qualified Data.Text.Encoding as T
 -- handler.
 asJson :: FromJSON json => Request -> (json -> IO Response) -> IO Response
 asJson request f = do
-    json <- decode <$> strictRequestBody request
-    fromMaybe (return $ respondWith400 "Failed to parse JSON.") (f <$> json)
+    body <- strictRequestBody request
+    fromMaybe (errorResponse body) (f <$> decode body)
+    where
+        log = "Endpoints.asJson"
+        errorResponse body = do
+            Log.warningM log "Unable to parse JSON."
+            Log.debugM log $ "\tProblematic JSON: " ++ show body
+            return $ respondWith400 "Failed to parse JSON."
+
 
 -- | A utility function that can be used to ensure that a request is properly
 -- authenticated. If the request contains a valid authentication token, then the
@@ -41,13 +49,20 @@ asJson request f = do
 -- is available, then a 403 response will be returned.
 requireAccount :: Request -> Database -> (ID -> IO Response) -> IO Response
 requireAccount request db f = do
+    Log.debugM log "Attempting to authenticate request."
     successResponse <- runMaybeT $ do
         authToken <- MaybeT $ return $ T.decodeUtf8 <$> authHeader
+        lift $ Log.debugM log $ "Found auth token: " ++ show authToken
         userId <- MaybeT $ accountIdForSession authToken db
+        lift $ Log.debugM log $ "Corresponding user: " ++ show userId
         return $ f userId
     fromMaybe errorResponse successResponse
     where
-        errorResponse = return $ respondWith403 "Not logged in."
+        log = "Endpoints.requireAccount"
+
+        errorResponse = do
+            Log.debugM log "Unable to verify logged in status."
+            return $ respondWith403 "Not logged in."
 
         authHeader = listToMaybe $ snd <$> filter (isAuthHeader . fst) headers
         isAuthHeader = (== "x-pifuxelck-auth")
@@ -75,8 +90,13 @@ newgame req db = requireAccount req db $ \_ -> return
 -- must be persisted.
 loginRequest :: ID -> Request -> Database -> IO Response
 loginRequest userId req db = do
+    let log = "Endpoints.loginRequest"
+    Log.infoM log "Beginning login."
     challenge <- randomBytes 64
     challengeId <- addChallenge userId challenge db
+    Log.infoM log $ concat [
+            "New challenge (", show challengeId, ") "
+        ,   "created for user ", show userId, "."]
     return $ jsonResponse $ LoginRequest challengeId challenge
 
 randomBytes :: DRBG.ByteLength -> IO BS.ByteString
@@ -90,6 +110,8 @@ randomBytes size = do
 -- properly signed the challenge string that they have been presented with.
 loginRespond :: ID -> Request -> Database -> IO Response
 loginRespond challengeId req db = do
+    let log = "Endpoints.loginRespond"
+    Log.infoM log $ "Completing login for challenge " ++ show challengeId ++ "."
     challenge <- getChallenge challengeId db
     deleteChallenge challengeId db
     -- Perform the remaining SQL queries and auth attempts in MaybeT so that
@@ -99,6 +121,7 @@ loginRespond challengeId req db = do
         account <- MaybeT $ getAccount userId db
         authToken <- byteStringToBase64 <$> (lift $ randomBytes 32)
         lift $ addSession userId authToken db
+        lift $ Log.infoM log "Login success."
         return [T.encodeUtf8 authToken]
     return $ fromMaybe errorResponse (plainTextResponse <$> authToken)
     where
@@ -109,8 +132,12 @@ loginRespond challengeId req db = do
 -- the MySQL database and returns in plaintext the newly created account's
 -- unique identifier. On failure it returns a 400."
 newaccount :: Request -> Database -> IO Response
-newaccount req db =
-    asJson req $ \account -> idToResponse <$> addAccount account db
+newaccount req db = asJson req $ \account -> do
+    let log = "Endpoints.newaccount"
+    Log.infoM log "Processing account creation request."
+    accountId <- addAccount account db
+    Log.infoM log $ "Created account: " ++ show accountId
+    return $ idToResponse accountId
     where
         idToResponse = plainTextResponse
             . return    -- ByteString -> [ByteString]
