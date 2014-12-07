@@ -6,8 +6,6 @@ module Server.Encoding (
 ,   integerToBytes
 ) where
 
-import Data.Bits
-
 import qualified Data.Binary as Binary
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Base64.URL as Base64

@@ -1,4 +1,3 @@
-{-# LANGUAGE TupleSections #-}
 module Server.Database (
   Database
 , ID
@@ -24,9 +23,7 @@ import Server.Encoding
 
 import Control.Applicative
 import Control.Monad
-import Control.Monad.Trans.Class
 import Control.Monad.Trans.Maybe
-import Data.Bits ((.&.))
 import Data.Maybe
 import Data.Time.Clock.POSIX
 import Data.Word
@@ -70,12 +67,12 @@ sqlCmd_ q conn = void $ execute_ conn q
 addChallenge :: ID -> BS.ByteString -> Sql ID
 addChallenge userId challenge connection = do
     timestamp <- round <$> getPOSIXTime :: IO Word64
-    sqlCmd query (values timestamp) connection >> insertID connection
+    let values = (challenge, userId, timestamp)
+    sqlCmd query values connection >> insertID connection
     where
         query = "INSERT INTO LoginChallenges \
             \(challenge, account_id, created_at) \
             \VALUES (?, ?, ?)"
-        values = (challenge, userId,)
 
 getChallenge :: ID -> Sql (Maybe Challenge)
 getChallenge id connection = do
@@ -85,7 +82,7 @@ getChallenge id connection = do
         return $ Challenge challenge userId
     where
         query = "SELECT challenge, account_id FROM LoginChallenges WHERE id = ?"
-        values = Only $ id
+        values = Only id
 
 deleteChallenge :: ID -> Sql ()
 deleteChallenge id =
@@ -94,12 +91,12 @@ deleteChallenge id =
 addSession :: ID -> T.Text -> Sql ()
 addSession userId authToken connection = do
     timestamp <- round <$> getPOSIXTime :: IO Word64
-    sqlCmd query (values timestamp) connection
+    let values = (authToken, userId, timestamp)
+    sqlCmd query values connection
     where
         query = "INSERT INTO Sessions \
             \(auth_token, account_id, created_at) \
             \VALUES (?, ?, ?)"
-        values = (authToken, userId,)
 
 accountIdForSession :: T.Text -> Sql (Maybe ID)
 accountIdForSession authToken connection = do
@@ -107,7 +104,7 @@ accountIdForSession authToken connection = do
     return $ (fromIntegral . fromOnly :: Only Integer -> ID) <$> maybeIntegerId
     where
         query = "SELECT account_id FROM Sessions WHERE auth_token = ?"
-        values = Only $ authToken
+        values = Only authToken
 
 --------------------------------------------------------------------------------
 -- Account CRUD

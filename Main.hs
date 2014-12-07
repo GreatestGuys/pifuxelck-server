@@ -1,5 +1,5 @@
 module Main (
-    main
+  main
 ) where
 
 import Server.Database
@@ -38,5 +38,5 @@ app db req respond = do
     respond response
 
 textToId :: T.Text -> Maybe ID
-textToId text | Left  _       <- T.decimal text = Nothing
-              | Right (id, _) <- T.decimal text = Just id
+textToId text | Right (id, _) <- T.decimal text = Just id
+              | otherwise                       = Nothing

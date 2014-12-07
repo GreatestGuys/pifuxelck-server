@@ -15,17 +15,14 @@ import Server.Structs
 import Control.Applicative
 import Control.Monad.Trans.Class
 import Control.Monad.Trans.Maybe
-import Data.CaseInsensitive (CI)
 import Data.Maybe
 import Data.Aeson (decode, FromJSON)
 import Network.Wai (strictRequestBody, requestHeaders, Request, Response)
 
 import qualified Crypto.Random as DRBG
 import qualified Crypto.Random.DRBG as DRBG
-import qualified Crypto.Types as DRBG
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Char8 as CBS
-import qualified Data.Text as T
 import qualified Data.Text.Encoding as T
 
 

@@ -12,9 +12,7 @@ import Data.Aeson
 import Data.Word
 
 import qualified Data.Text as T
-import qualified Data.Text.Encoding as T
 import qualified Data.ByteString as BS
-import qualified Data.ByteString.Base64.URL as Base64
 
 
 data LoginRequest = LoginRequest Word64 BS.ByteString
