@@ -30,6 +30,7 @@ executable pifuxelck-server
     , hslogger >= 1.2
     , http-types >= 0.8.5
     , mysql-simple >= 0.2.2.4
+    , optparse-applicative >= 0.7
     , text >= 1.2.0.0
     , time >= 1.4
     , transformers >= 0.3
