@@ -1,22 +1,39 @@
 module Server.Structs (
   Account(..)
+, Challenge (..)
+, LoginRequest (..)
 ) where
+
+import Server.Encoding
 
 import Control.Applicative ((<$>), (<*>))
 import Control.Monad (mzero)
 import Data.Aeson
-import Data.ByteString (unpack)
-import Data.ByteString.Base64.URL (decodeLenient)
-import Data.Text (Text)
-import Data.Text.Encoding (encodeUtf8)
+import Data.Word
 
+import qualified Data.Text as T
+import qualified Data.ByteString as BS
+
+
+data LoginRequest = LoginRequest Word64 BS.ByteString
+
+instance ToJSON LoginRequest where
+    toJSON (LoginRequest id challenge) = object [
+            "id" .= id
+        ,   "challenge" .= byteStringToBase64 challenge
+        ]
+
+data Challenge = Challenge {
+        challengeString :: BS.ByteString
+    ,   accountId       :: Word64
+    }
 
 data Account = Account {
-    exponent          :: Integer
-  , modulus           :: Integer
-  , displayName       :: Text
-  , hashedPhoneNumber :: Maybe Text
-  }
+        exponent          :: Integer
+    ,   modulus           :: Integer
+    ,   displayName       :: T.Text
+    ,   hashedPhoneNumber :: Maybe T.Text
+    }
 
 instance FromJSON Account where
   parseJSON (Object v) = Account
@@ -25,9 +42,3 @@ instance FromJSON Account where
       <*> v .: "display_name"
       <*> v .: "hashed_phone"
   parseJSON _          = mzero
-
-base64ToInteger :: Text -> Integer
-base64ToInteger = foldl (\a b -> a * 256 + fromIntegral b) 0
-    . unpack        -- ByteString -> Word8
-    . decodeLenient -- ByteString -> ByteString
-    . encodeUtf8    -- Text -> ByteString

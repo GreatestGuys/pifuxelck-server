@@ -1,10 +1,18 @@
+module Main (
+  main
+) where
+
+import Server.Database
+import Server.Endpoints
+
 import Control.Applicative
 import Network.Wai (pathInfo, Request, Response)
 import Network.Wai.Handler.Warp
 import System.Environment (getArgs)
 
-import Server.Database
-import Server.Endpoints (inbox, generic404, newaccount, newgame)
+import qualified Data.Text as T
+import qualified Data.Text.Read as T
+
 
 import qualified System.IO as IO (stderr, Handle)
 import qualified System.Log.Handler.Simple as Log
@@ -38,13 +46,19 @@ app db req respond = do
     let log = "Main.app"
     Log.debugM log $ "Incoming request: " ++ show req
     response <- case pathInfo req of
-                  ["inbox"]   -> inbox
-                  ["newgame"] -> newgame
-                  ["account"] -> newaccount req db
-                  path        -> do
-                      Log.warningM log $ "404 unknown path: " ++ show path
-                      generic404
+        ["inbox"]                                    -> inbox req db
+        ["newgame"]                                  -> newgame req db
+        ["account"]                                  -> newaccount req db
+        ["login", "0", id] | Just id' <- textToId id -> loginRequest id' req db
+        ["login", "1", id] | Just id' <- textToId id -> loginRespond id' req db
+        path                                         -> do
+            Log.warningM log $ "404 unknown path: " ++ show path
+            generic404
     respond response
+
+textToId :: T.Text -> Maybe ID
+textToId text | Right (id, _) <- T.decimal text = Just id
+              | otherwise                       = Nothing
 
 -- | Setup logging to STDERR, and two output files, a noisy one containing all
 -- INFO messages and above and one containing just errors.
@@ -64,4 +78,3 @@ initLogging = do
                       -> Log.GenericHandler IO.Handle
         withFormatter = flip Log.setFormatter formatter
         formatter = Log.simpleLogFormatter "[$time $loggername $prio] $msg"
-

@@ -5,7 +5,7 @@ name:                pifuxelck-server
 version:             0.1.0.0
 -- synopsis:
 description:         Backend server for GreatestGuys pifuxelck game.
-author:              jesse
+author:              jesse, will
 maintainer:          number.dot.ten@gmail.com
 -- copyright:
 -- category:
@@ -18,6 +18,32 @@ executable pifuxelck-server
   main-is:             Main.hs
   -- other-modules:
   -- other-extensions:
+  build-depends:
+      aeson >= 0.8.0.2
+    , base >=4.6 && <4.7
+    , binary >= 0.5
+    , blaze-builder >= 0.3.3.4
+    , base64-bytestring >= 0.1.1.0
+    , bytestring >= 0.10.4.1
+    , case-insensitive >= 1.2
+    , crypto-api >= 0.13
+    , hslogger >= 1.2
+    , http-types >= 0.8.5
+    , mysql-simple >= 0.2.2.4
+    , text >= 1.2.0.0
+    , time >= 1.4
+    , transformers >= 0.3
+    , utf8-string >= 0.3.8
+    , DRBG >= 0.5
+    , wai >= 3.0.2
+    , warp >= 3.0.2.3
+  default-extensions:
+      OverloadedStrings
+  default-language:    Haskell2010
+
+executable pifuxelck-server-deploy
+  ghc-options:         -Wall -O2 --make -static -optc-static -optl-static -optl-pthread
+  main-is:             Main.hs
   build-depends:
       aeson >= 0.8.0.2
     , base >=4.6 && <4.7
