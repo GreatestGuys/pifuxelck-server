@@ -13,16 +13,20 @@ import Server.Response
 import Server.Structs
 
 import Control.Applicative
+import Control.Monad
 import Control.Monad.Trans.Class
 import Control.Monad.Trans.Maybe
-import Data.Maybe
 import Data.Aeson (decode, FromJSON)
+import Data.Maybe
 import Network.Wai (strictRequestBody, requestHeaders, Request, Response)
+import Prelude hiding (exponent)
 
+import qualified Codec.Crypto.RSA as RSA
 import qualified Crypto.Random as DRBG
 import qualified Crypto.Random.DRBG as DRBG
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Char8 as CBS
+import qualified Data.ByteString.Lazy as LBS
 import qualified Data.Text.Encoding as T
 import qualified System.Log.Logger as Log
 
@@ -108,17 +112,30 @@ randomBytes size = do
 
 -- | This endpoint completes the login flow by verifying that the user has
 -- properly signed the challenge string that they have been presented with.
+-- Successfully completing the login flow will return an auth token which can be
+-- given in HTTP headers to authenticate future requests. An entry is created in
+-- the Sessions table to associate the token with the corresponding user ID.
 loginRespond :: ID -> Request -> Database -> IO Response
 loginRespond challengeId req db = do
     let log = "Endpoints.loginRespond"
     Log.infoM log $ "Completing login for challenge " ++ show challengeId ++ "."
-    challenge <- getChallenge challengeId db
-    deleteChallenge challengeId db
-    -- Perform the remaining SQL queries and auth attempts in MaybeT so that
-    -- errors are threaded seamlessly.
+    signature <- lbs64ToLbs <$> strictRequestBody req
+    -- Perform the remaining SQL queries and auth attempts in MaybeT so that all
+    -- errors can be handled at once.
     authToken <- runMaybeT $ do
-        userId <-  MaybeT $ return $ (accountId <$> challenge)
+        lift $ Log.debugM log "Looking up challenge info."
+        challenge <- MaybeT $ getChallenge challengeId db
+        lift $ deleteChallenge challengeId db
+
+        lift $ Log.debugM log "Looking up user from challenge info."
+        let userId = accountId $ challenge
         account <- MaybeT $ getAccount userId db
+
+        lift $ Log.debugM log "Verifying signature."
+        lift $ Log.debugM log $ "Sig size: " ++ show (LBS.length signature)
+        guard $ verifySig account challenge signature
+
+        lift $ Log.debugM log "Generating auth token."
         authToken <- byteStringToBase64 <$> (lift $ randomBytes 32)
         lift $ addSession userId authToken db
         lift $ Log.infoM log "Login success."
@@ -126,6 +143,21 @@ loginRespond challengeId req db = do
     return $ fromMaybe errorResponse (plainTextResponse <$> authToken)
     where
         errorResponse = respondWith403 "Invalid challenge response."
+
+        verifySig Account{exponent=e, modulus=n}
+                  Challenge{challengeString=challenge} =
+            let publicKey = RSA.PublicKey {
+                    RSA.public_size = 256  -- key size in bytes (2048 bits)
+                ,   RSA.public_n    = n
+                ,   RSA.public_e    = e
+                }
+            in  RSA.verify publicKey (LBS.fromStrict challenge)
+
+        -- The RSA functions operate on lazy ByteStrings, these methods handle
+        -- decoding base 64 encoded values into lazy ByteStrings so that they
+        -- can be used with the RSA functions.
+        lbs64ToLbs = bs64ToLbs . LBS.toStrict
+        bs64ToLbs = LBS.fromStrict . base64ToByteString . T.decodeUtf8
 
 -- | This endpoint attempts to parse the request body from a json object
 -- into an Account. If successful it adds the new account information into
