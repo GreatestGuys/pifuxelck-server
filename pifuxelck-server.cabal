@@ -19,11 +19,13 @@ executable pifuxelck-server
   -- other-modules:
   -- other-extensions:
   build-depends:
-      aeson >= 0.8.0.2
+      DRBG >= 0.5
+    , RSA >= 2.1
+    , aeson >= 0.8.0.2
     , base >=4.6 && <4.7
+    , base64-bytestring >= 0.1.1.0
     , binary >= 0.5
     , blaze-builder >= 0.3.3.4
-    , base64-bytestring >= 0.1.1.0
     , bytestring >= 0.10.4.1
     , case-insensitive >= 1.2
     , crypto-api >= 0.13
@@ -35,7 +37,6 @@ executable pifuxelck-server
     , time >= 1.4
     , transformers >= 0.3
     , utf8-string >= 0.3.8
-    , DRBG >= 0.5
     , wai >= 3.0.2
     , warp >= 3.0.2.3
   default-extensions:
