@@ -1,3 +1,4 @@
+{-# LANGUAGE ScopedTypeVariables #-}
 module Server.Database (
   Database
 , ID
@@ -5,6 +6,7 @@ module Server.Database (
 
 , addAccount
 , getAccount
+, accountIdForName
 
 , addChallenge
 , getChallenge
@@ -22,11 +24,13 @@ import Server.Structs
 import Server.Encoding
 
 import Control.Applicative
+import Control.Exception
 import Control.Monad
 import Control.Monad.Trans.Maybe
 import Data.Maybe
 import Data.Time.Clock.POSIX
 import Data.Word
+import Database.MySQL.Base (MySQLError)
 import Database.MySQL.Simple
 import Database.MySQL.Simple.QueryParams
 import Database.MySQL.Simple.QueryResults
@@ -109,21 +113,36 @@ accountIdForSession authToken connection = do
 --------------------------------------------------------------------------------
 -- Account CRUD
 
-addAccount :: Account -> Sql ID
+addAccount :: Account -> Sql (Maybe ID)
 addAccount (Account exponent modulus name Nothing) connection =
-    sqlCmd query values connection >> insertID connection
+    (sqlCmd query values connection >> (Just <$> insertID connection))
+        `catch` (\(_ :: MySQLError) -> return Nothing)
     where
         query = "insert into Accounts \
             \(key_exponent, key_modulus, display_name) \
             \values (?, ?, ?)"
         values = (integerToBytes exponent, integerToBytes modulus, name)
 addAccount (Account exponent modulus name (Just number)) connection =
-    sqlCmd query values connection >> insertID connection
+    (sqlCmd query values connection >> (Just <$> insertID connection))
+        `catch` (\(_ :: MySQLError) -> return Nothing)
     where
         query = "insert into Accounts \
             \(key_exponent, key_modulus, display_name, hashed_phone_number) \
             \values (?, ?, ?, ?)"
         values = (integerToBytes exponent, integerToBytes modulus, name, number)
+
+accountIdForName :: T.Text -> Sql (Maybe ID)
+accountIdForName name connection = do
+    let results = listToMaybe <$> sqlQuery query values connection
+    runMaybeT $ do
+        Only userId <- MaybeT results
+        return userId
+    where
+        query = "SELECT \
+            \id \
+            \FROM Accounts \
+            \WHERE display_name = ?"
+        values = Only name
 
 getAccount :: ID -> Sql (Maybe Account)
 getAccount id connection = do

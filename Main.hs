@@ -89,6 +89,7 @@ app db req respond = do
         ["inbox"]                                    -> inbox req db
         ["newgame"]                                  -> newgame req db
         ["account"]                                  -> newaccount req db
+        ["account", "lookup", name]                  -> findAccount name req db
         ["login", "0", id] | Just id' <- textToId id -> loginRequest id' req db
         ["login", "1", id] | Just id' <- textToId id -> loginRespond id' req db
         path                                         -> do
