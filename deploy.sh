@@ -11,11 +11,6 @@ fi
 
 TMP_FILE=`mktemp /tmp/pifuxelck.XXXXXXX.sh`
 cat > $TMP_FILE << EOF
-#!/bin/bash
-echo ""
-echo -e "${BYellow}Killing existing server instances...${Color_Off}"
-killall pifuxelck-server
-
 echo ""
 echo -e "${BYellow}Launching new instance...${Color_Off}"
 cd /srv/pifuxelck/
@@ -25,7 +20,7 @@ cd /srv/pifuxelck/
   --mysql-port 3306 \
   --mysql-user pifuxelck \
   --mysql-password $2 \
-  --mysql-db pifuxelck 2> /dev/null > /dev/null < /dev/null &
+  --mysql-db pifuxelck 2>stderr > stdout < /dev/null &
 exit
 EOF
 
@@ -34,6 +29,12 @@ echo -e "${BYellow}Building the executable...${Color_Off}"
 cabal sandbox init
 cabal install --only-dependencies
 cabal build pifuxelck-server
+
+echo ""
+echo -e "${BYellow}Killing existing server instances...${Color_Off}"
+ssh \
+  $1@everythingissauce.com \
+  "sudo su -c 'killall pifuxelck-server' pifuxelck"
 
 echo ""
 echo -e "${BYellow}Deploying the executable...${Color_Off}"
