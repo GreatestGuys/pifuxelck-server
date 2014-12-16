@@ -88,6 +88,7 @@ app db req respond = do
     response <- case pathInfo req of
         ["inbox"]                                    -> inbox req db
         ["newgame"]                                  -> newgame req db
+        ["inbox"]                                    -> inbox req db
         ["account"]                                  -> newaccount req db
         ["account", "lookup", name]                  -> findAccount name req db
         ["login", "0", id] | Just id' <- textToId id -> loginRequest id' req db

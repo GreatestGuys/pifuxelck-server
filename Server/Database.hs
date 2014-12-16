@@ -1,3 +1,4 @@
+{-# LANGUAGE ParallelListComp #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 module Server.Database (
   Database
@@ -14,6 +15,9 @@ module Server.Database (
 
 , addSession
 , accountIdForSession
+
+, addGame
+, getActiveTurnsForPlayer
 
 , connect
 , defaultConnectInfo
@@ -160,3 +164,44 @@ getAccount id connection = do
             \FROM Accounts \
             \WHERE id = ?"
         values = Only $ show id
+
+--------------------------------------------------------------------------------
+-- Game CRUD
+
+addGame :: ID -> NewGame -> Sql ID
+addGame firstPlayer (NewGame players label) connection = do
+    sqlCmd "INSERT INTO Game (completed_at) values (NULL)" () connection
+    gameId <- insertID connection
+    sqlCmd firstTurnInsertQuery (firstPlayer, gameId, label) connection
+    mapM_ insertTurn $ playerValues gameId
+    return gameId
+    where
+        insertTurn values = sqlCmd turnInsertQuery values connection
+        firstTurnInsertQuery =
+            "INSERT INTO Turns \
+            \(account_id, game_id, is_complete, is_drawing, label) \
+            \ values (?, ?, 1, 0, ?)"
+        turnInsertQuery =
+            "INSERT INTO Turns \
+            \(account_id, game_id, is_complete, is_drawing) \
+            \ values (?, ?, 0, ?)"
+        playerValues gameId = [ (gameId, playerId, isDrawing)
+                              | playerId  <- players
+                              | isDrawing <- cycle [True, False]
+                              ]
+
+getActiveTurnsForPlayer :: ID -> Sql [InboxEntry]
+getActiveTurnsForPlayer userId connection =
+    (map toInboxEntry) <$> sqlQuery query (Only userId) connection
+    where
+        toInboxEntry (gameId, drawing, _, True) = InboxDrawing drawing gameId
+        toInboxEntry (gameId, _, label, True)   = InboxLabel label gameId
+        query = "SELECT game_id, drawing, label, is_drawing \
+                \FROM Turns \
+                \JOIN ( \
+                \    SELECT min(id) AS current_id \
+                \    FROM Turns CurrentTurns \
+                \    WHERE is_complete = NULL \
+                \    GROUP BY game_id \
+                \) ON CurrentTurns.current_id = Turns.id \
+                \WHERE Turns.account_id = ?"
