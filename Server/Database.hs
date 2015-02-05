@@ -170,7 +170,7 @@ getAccount id connection = do
 
 addGame :: ID -> NewGame -> Sql ID
 addGame firstPlayer (NewGame players label) connection = do
-    sqlCmd "INSERT INTO Game (completed_at) values (NULL)" () connection
+    sqlCmd "INSERT INTO Games (completed_at) values (NULL)" () connection
     gameId <- insertID connection
     sqlCmd firstTurnInsertQuery (firstPlayer, gameId, label) connection
     mapM_ insertTurn $ playerValues gameId
@@ -185,7 +185,7 @@ addGame firstPlayer (NewGame players label) connection = do
             "INSERT INTO Turns \
             \(account_id, game_id, is_complete, is_drawing) \
             \ values (?, ?, 0, ?)"
-        playerValues gameId = [ (gameId, playerId, isDrawing)
+        playerValues gameId = [ (playerId, gameId, isDrawing)
                               | playerId  <- players
                               | isDrawing <- cycle [True, False]
                               ]
@@ -197,10 +197,10 @@ getActiveTurnsForPlayer userId connection =
         toInboxEntry (gameId, drawing, _, True) = InboxDrawing drawing gameId
         toInboxEntry (gameId, _, label, True)   = InboxLabel label gameId
         query = "SELECT game_id, drawing, label, is_drawing \
-                \FROM Turns \
+                \FROM Turns AS Turns \
                 \JOIN ( \
                 \    SELECT min(id) AS current_id \
-                \    FROM Turns CurrentTurns \
+                \    FROM Turns AS CurrentTurns \
                 \    WHERE is_complete = NULL \
                 \    GROUP BY game_id \
                 \) ON CurrentTurns.current_id = Turns.id \
