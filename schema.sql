@@ -15,7 +15,7 @@ CREATE TABLE Accounts (
   id                  INT(11)     NOT NULL AUTO_INCREMENT,
   key_exponent        BLOB        NOT NULL,
   key_modulus         BLOB        NOT NULL,
-  display_name        VARCHAR(32) NOT NULL,
+  display_name        VARCHAR(32) NOT NULL UNIQUE,
   hashed_phone_number CHAR(64),
   PRIMARY KEY (id)
 );

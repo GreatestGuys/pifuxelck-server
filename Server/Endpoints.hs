@@ -1,8 +1,9 @@
 module Server.Endpoints (
   inbox
-, loginRespond
-, loginRequest
+, findAccount
 , generic404
+, loginRequest
+, loginRespond
 , newaccount
 , newgame
 ) where
@@ -27,6 +28,7 @@ import qualified Crypto.Random.DRBG as DRBG
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Char8 as CBS
 import qualified Data.ByteString.Lazy as LBS
+import qualified Data.Text as T
 import qualified Data.Text.Encoding as T
 import qualified System.Log.Logger as Log
 
@@ -162,16 +164,32 @@ loginRespond challengeId req db = do
 -- | This endpoint attempts to parse the request body from a json object
 -- into an Account. If successful it adds the new account information into
 -- the MySQL database and returns in plaintext the newly created account's
--- unique identifier. On failure it returns a 400."
+-- unique identifier. On failure it returns a 400.
 newaccount :: Request -> Database -> IO Response
 newaccount req db = asJson req $ \account -> do
     let log = "Endpoints.newaccount"
     Log.infoM log "Processing account creation request."
-    accountId <- addAccount account db
-    Log.infoM log $ "Created account: " ++ show accountId
-    return $ idToResponse accountId
+    userId <- addAccount account db
+    Log.infoM log $ "Created account: " ++ show userId
+    return $ fromMaybe errorResponse (idToResponse <$> userId)
     where
-        idToResponse = plainTextResponse
-            . return    -- ByteString -> [ByteString]
-            . CBS.pack  -- String -> ByteString
-            . show      -- Render the ID as a String.
+        errorResponse = respondWith403 "Already registered."
+
+-- | This endpoint will return the user ID for a given display name. On success
+-- it returns in plaintext the ID number of the account. On failure it returns
+-- a 404.
+findAccount :: T.Text -> Request -> Database -> IO Response
+findAccount name req db = requireAccount req db $ \_ -> do
+    let log = "Endpoints.newaccount"
+    Log.infoM log $ "Looking up user ID for '" ++ T.unpack name ++ "'."
+    userId <- accountIdForName name db
+    Log.infoM log $ "Found corresponding user ID '" ++ show userId ++ "'."
+    return $ fromMaybe errorResponse (idToResponse <$> userId)
+    where
+        errorResponse = respondWith404 "No such account."
+
+idToResponse :: ID -> Response
+idToResponse = plainTextResponse
+    . return    -- ByteString -> [ByteString]
+    . CBS.pack  -- String -> ByteString
+    . show      -- Render the ID as a String.
