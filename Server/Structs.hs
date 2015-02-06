@@ -15,7 +15,9 @@ import Data.Aeson
 import Data.Word
 
 import qualified Data.Text as T
+import qualified Data.Text.Encoding as T
 import qualified Data.ByteString as BS
+import qualified Data.ByteString.Lazy as LBS
 
 
 data LoginRequest = LoginRequest Word64 BS.ByteString
@@ -75,23 +77,26 @@ instance FromJSON ClientTurn where
     parseJSON (Object v) = do
         ty <- v .: "type"
         case (ty :: T.Text) of
-            "drawing" -> ClientDrawingTurn <$> v .: "drawing"
-            "label"   -> ClientLabelTurn   <$> v .: "label"
+            "drawing" -> ClientDrawingTurn . drawingToText <$> v .: "contents"
+            "label"   -> ClientLabelTurn   <$> v .: "contents"
             otherwise -> mzero
+        where
+            drawingToText :: Value -> T.Text
+            drawingToText = T.decodeUtf8 . LBS.toStrict . encode
     parseJSON _          = mzero
 
 instance ToJSON InboxEntry where
     toJSON (InboxDrawing drawing gameId) = object [
             "game_id" .= gameId
         ,   "turn"    .= object [
-                "drawing" .= drawing
+                "contents" .= (decode $ LBS.fromStrict $ T.encodeUtf8 drawing :: Maybe Value)
             ,   "type"    .= ("drawing" :: T.Text)
             ]
         ]
     toJSON (InboxLabel label gameId) = object [
             "game_id" .= gameId
         ,   "turn"    .= object [
-                "label" .= label
+                "contents" .= label
             ,   "type"  .= ("label" :: T.Text)
             ]
         ]

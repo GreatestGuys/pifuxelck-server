@@ -60,8 +60,8 @@ CREATE TABLE Turns (
   game_id             INT(11)     NOT NULL,
   is_complete         BOOLEAN     NOT NULL,
   is_drawing          BOOLEAN     NOT NULL,
-  label               TEXT,
-  drawing             TEXT,
+  label               TEXT        NOT NULL,
+  drawing             TEXT        NOT NULL,
 
   PRIMARY KEY (id),
   FOREIGN KEY (account_id) REFERENCES Accounts (id),

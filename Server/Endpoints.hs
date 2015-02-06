@@ -4,6 +4,7 @@ module Server.Endpoints (
 , generic404
 , loginRequest
 , loginRespond
+, move
 , newaccount
 , newgame
 ) where
@@ -92,8 +93,21 @@ newgame req db =
         return $ plainTextResponse [""]
 
 inbox :: Request -> Database -> IO Response
-inbox req db = requireAccount req db $ \accountId ->
+inbox req db = requireAccount req db $ \accountId -> do
+    let log = "Endpoints.inbox"
+    Log.infoM log $ "Looking up inbox for account: " ++ show accountId
+    turns <- getActiveTurnsForPlayer accountId db
+    Log.infoM log $ "Found " ++ show (length turns) ++ " entries"
     jsonResponse <$> getActiveTurnsForPlayer accountId db
+
+move :: ID -> Request -> Database -> IO Response
+move gameId req db =
+    requireAccount req db $ \accountId ->
+    asJson req $ \clientTurn -> do
+        let log = "Endpoints.taketurn"
+        Log.infoM log $ "Taking turn in game " ++ show gameId
+        updateCurrentTurn gameId accountId clientTurn db
+        return $ plainTextResponse [""]
 
 -- | The endpoint is the beginning of the login flow. It returns a random string
 -- to the user that is to be cryptographically signed and returned. Since this
