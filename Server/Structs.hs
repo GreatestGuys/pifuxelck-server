@@ -2,6 +2,9 @@ module Server.Structs (
   Account(..)
 , Challenge (..)
 , LoginRequest (..)
+, NewGame (..)
+, ClientTurn (..)
+, InboxEntry (..)
 ) where
 
 import Server.Encoding
@@ -12,7 +15,9 @@ import Data.Aeson
 import Data.Word
 
 import qualified Data.Text as T
+import qualified Data.Text.Encoding as T
 import qualified Data.ByteString as BS
+import qualified Data.ByteString.Lazy as LBS
 
 
 data LoginRequest = LoginRequest Word64 BS.ByteString
@@ -42,3 +47,56 @@ instance FromJSON Account where
       <*> v .: "display_name"
       <*> v .: "hashed_phone"
   parseJSON _          = mzero
+
+data NewGame = NewGame {
+        accountIds         :: [Word64]
+    ,   initialDescription :: T.Text
+    }
+
+instance FromJSON NewGame where
+    parseJSON (Object v) = NewGame
+        <$> v .: "players"
+        <*> v .: "label"
+    parseJSON _          = mzero
+
+data ClientTurn
+    = ClientDrawingTurn T.Text
+    | ClientLabelTurn   T.Text
+
+data InboxEntry
+    = InboxDrawing {
+        inboxDrawing :: T.Text
+    ,   inboxGameId  :: Word64
+    }
+    | InboxLabel {
+        inboxLabel   :: T.Text
+    ,   inboxGameId  :: Word64
+    }
+
+instance FromJSON ClientTurn where
+    parseJSON (Object v) = do
+        ty <- v .: "type"
+        case (ty :: T.Text) of
+            "drawing" -> ClientDrawingTurn . drawingToText <$> v .: "contents"
+            "label"   -> ClientLabelTurn   <$> v .: "contents"
+            otherwise -> mzero
+        where
+            drawingToText :: Value -> T.Text
+            drawingToText = T.decodeUtf8 . LBS.toStrict . encode
+    parseJSON _          = mzero
+
+instance ToJSON InboxEntry where
+    toJSON (InboxDrawing drawing gameId) = object [
+            "game_id" .= gameId
+        ,   "turn"    .= object [
+                "contents" .= (decode $ LBS.fromStrict $ T.encodeUtf8 drawing :: Maybe Value)
+            ,   "type"    .= ("drawing" :: T.Text)
+            ]
+        ]
+    toJSON (InboxLabel label gameId) = object [
+            "game_id" .= gameId
+        ,   "turn"    .= object [
+                "contents" .= label
+            ,   "type"  .= ("label" :: T.Text)
+            ]
+        ]

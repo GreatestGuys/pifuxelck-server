@@ -4,6 +4,7 @@ module Server.Endpoints (
 , generic404
 , loginRequest
 , loginRespond
+, move
 , newaccount
 , newgame
 ) where
@@ -21,6 +22,7 @@ import Data.Aeson (decode, FromJSON)
 import Data.Maybe
 import Network.Wai (strictRequestBody, requestHeaders, Request, Response)
 import Prelude hiding (exponent)
+import System.Random.Shuffle
 
 import qualified Codec.Crypto.RSA as RSA
 import qualified Crypto.Random as DRBG
@@ -74,21 +76,38 @@ requireAccount request db f = do
         isAuthHeader = (== "x-pifuxelck-auth")
         headers = requestHeaders request
 
-inbox :: Request -> Database -> IO Response
-inbox req db = requireAccount req db $ \_ -> return
-      . plainTextResponse
-      $ [ "This is your inbox.\n"
-        , "There are many like it,\n"
-        , "but this one is yours."
-        ]
-
 generic404 :: IO Response
 generic404 = return
            $ respondWith404 "You can't dry a bug!"
 
+-- | This endpoint creates a new game with a
 newgame :: Request -> Database -> IO Response
-newgame req db = requireAccount req db $ \_ -> return
-        $ plainTextResponse ["Server down for scheduled maintenance."]
+newgame req db =
+    requireAccount req db $ \accountId ->
+    asJson req $ \(NewGame players label) -> do
+        let log = "Endpoints.newgame"
+        Log.infoM log "Processing game creation request."
+        shuffledPlayers <- shuffleM players
+        gameId <- addGame accountId (NewGame shuffledPlayers label) db
+        Log.infoM log $ "Created game: " ++ show gameId
+        return $ plainTextResponse [""]
+
+inbox :: Request -> Database -> IO Response
+inbox req db = requireAccount req db $ \accountId -> do
+    let log = "Endpoints.inbox"
+    Log.infoM log $ "Looking up inbox for account: " ++ show accountId
+    turns <- getActiveTurnsForPlayer accountId db
+    Log.infoM log $ "Found " ++ show (length turns) ++ " entries"
+    jsonResponse <$> getActiveTurnsForPlayer accountId db
+
+move :: ID -> Request -> Database -> IO Response
+move gameId req db =
+    requireAccount req db $ \accountId ->
+    asJson req $ \clientTurn -> do
+        let log = "Endpoints.taketurn"
+        Log.infoM log $ "Taking turn in game " ++ show gameId
+        updateCurrentTurn gameId accountId clientTurn db
+        return $ plainTextResponse [""]
 
 -- | The endpoint is the beginning of the login flow. It returns a random string
 -- to the user that is to be cryptographically signed and returned. Since this

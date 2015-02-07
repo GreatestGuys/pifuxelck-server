@@ -1,3 +1,4 @@
+{-# LANGUAGE ParallelListComp #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 module Server.Database (
   Database
@@ -14,6 +15,10 @@ module Server.Database (
 
 , addSession
 , accountIdForSession
+
+, addGame
+, getActiveTurnsForPlayer
+, updateCurrentTurn
 
 , connect
 , defaultConnectInfo
@@ -160,3 +165,77 @@ getAccount id connection = do
             \FROM Accounts \
             \WHERE id = ?"
         values = Only $ show id
+
+--------------------------------------------------------------------------------
+-- Game CRUD
+
+addGame :: ID -> NewGame -> Sql ID
+addGame firstPlayer (NewGame players label) connection = do
+    sqlCmd "INSERT INTO Games (completed_at) values (NULL)" () connection
+    gameId <- insertID connection
+    sqlCmd firstTurnInsertQuery (firstPlayer, gameId, label) connection
+    mapM_ insertTurn $ playerValues gameId
+    return gameId
+    where
+        insertTurn values = sqlCmd turnInsertQuery values connection
+        firstTurnInsertQuery =
+            "INSERT INTO Turns \
+            \(account_id, game_id, is_complete, is_drawing, label, drawing) \
+            \ values (?, ?, 1, 0, ?, '')"
+        turnInsertQuery =
+            "INSERT INTO Turns \
+            \(account_id, game_id, is_complete, is_drawing, label, drawing) \
+            \ values (?, ?, 0, ?, '', '')"
+        playerValues gameId = [ (playerId, gameId, isDrawing)
+                              | playerId  <- players
+                              | isDrawing <- cycle [True, False] ]
+
+getActiveTurnsForPlayer :: ID -> Sql [InboxEntry]
+getActiveTurnsForPlayer userId connection =
+    (map toInboxEntry) <$> sqlQuery query (Only userId) connection
+    where
+        toInboxEntry :: (Word64, Word64, T.Text, T.Text, Bool) -> InboxEntry
+        toInboxEntry (_, game, drawing, _, True) = InboxDrawing drawing game
+        toInboxEntry (_, game, _, label, False)  = InboxLabel label game
+
+        query = "SELECT T.id, T.game_id, T.drawing, T.label, T.is_drawing \
+                \FROM Turns AS T \
+                \INNER JOIN ( \
+                \  SELECT MIN(CT.id), CT.game_id, CT.account_id \
+                \  FROM Turns AS CT \
+                \  WHERE is_complete = 0 \
+                \  GROUP BY CT.game_id \
+                \) AS CT ON CT.game_id = T.game_id \
+                \INNER JOIN ( \
+                \  SELECT MAX(PT.id) as previous_turn_id, PT.game_id \
+                \  FROM Turns AS PT \
+                \  WHERE is_complete = 1 \
+                \  GROUP BY PT.game_id \
+                \) AS PT ON PT.previous_turn_id = T.id \
+                \WHERE CT.account_id = ?"
+
+updateCurrentTurn :: ID -> ID -> ClientTurn -> Sql ()
+updateCurrentTurn gameId accountId (ClientLabelTurn label) connection =
+    sqlCmd query (label, accountId, gameId, gameId) connection
+    where
+        query = "UPDATE Turns \
+                \SET label = ?, is_complete = 1 \
+                \WHERE account_id = ? \
+                \  AND game_id = ? \
+                \  AND is_drawing = 0 \
+                \  AND id = ( \
+                \       SELECT MIN(T.id) \
+                \       FROM (SELECT * FROM Turns) AS T \
+                \       WHERE T.is_complete = 0 AND T.game_id = ?)"
+updateCurrentTurn gameId accountId (ClientDrawingTurn drawing) connection =
+    sqlCmd query (drawing, accountId, gameId, gameId) connection
+    where
+        query = "UPDATE Turns \
+                \SET drawing = ?, is_complete = 1 \
+                \WHERE account_id = ? \
+                \  AND game_id = ? \
+                \  AND is_drawing = 1 \
+                \  AND id = ( \
+                \       SELECT MIN(T.id) \
+                \       FROM (SELECT * FROM Turns) AS T \
+                \       WHERE T.is_complete = 0 AND T.game_id = ?)"
