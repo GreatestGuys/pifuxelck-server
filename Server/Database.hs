@@ -18,7 +18,9 @@ module Server.Database (
 
 , addGame
 , getActiveTurnsForPlayer
+, getCompletedGames
 , updateCurrentTurn
+, updateGameCompletedTime
 
 , connect
 , defaultConnectInfo
@@ -32,6 +34,7 @@ import Control.Applicative
 import Control.Exception
 import Control.Monad
 import Control.Monad.Trans.Maybe
+import Data.List
 import Data.Maybe
 import Data.Time.Clock.POSIX
 import Data.Word
@@ -171,7 +174,7 @@ getAccount id connection = do
 
 addGame :: ID -> NewGame -> Sql ID
 addGame firstPlayer (NewGame players label) connection = do
-    sqlCmd "INSERT INTO Games (completed_at) values (NULL)" () connection
+    sqlCmd_ "INSERT INTO Games (completed_at) values (NULL)" connection
     gameId <- insertID connection
     sqlCmd firstTurnInsertQuery (firstPlayer, gameId, label) connection
     mapM_ insertTurn $ playerValues gameId
@@ -239,3 +242,60 @@ updateCurrentTurn gameId accountId (ClientDrawingTurn drawing) connection =
                 \       SELECT MIN(T.id) \
                 \       FROM (SELECT * FROM Turns) AS T \
                 \       WHERE T.is_complete = 0 AND T.game_id = ?)"
+
+updateGameCompletedTime :: ID -> Sql ()
+updateGameCompletedTime gameId connection =
+    sqlCmd query (gameId, gameId) connection
+    where
+        query = "UPDATE Games \
+                \SET completed_at = NOW() \
+                \WHERE id = ? \
+                \  AND completed_at IS NULL \
+                \  AND 1 = ( \
+                \       SELECT SUM(is_complete) = COUNT(*) \
+                \       FROM Turns \
+                \       WHERE game_id = ?)"
+
+getCompletedGames :: ID -> Integer -> Sql [Game]
+getCompletedGames accountID startTime connection =
+    toGames <$> sqlQuery query (accountID, startTime) connection
+    where
+        -- This is O(n^2), but I'm too lazy to write an O(n) version, and we are
+        -- only returning a maximum of 10 games right now...
+        toGames :: [(ID, Integer, T.Text, Bool, T.Text, T.Text)] -> [Game]
+        toGames [] = []
+        toGames rows@((gameId, completedAt, _, _, _, _):_) = game : toGames rest
+            where
+                (rowsInGame, rest) = partition isInGame rows
+                game = Game gameId completedAt (map rowToTurn rowsInGame)
+
+                isInGame (rowGameId, _, _, _, _, _) = gameId == rowGameId
+
+                rowToTurn (_, _, accountId, True, drawing, _) =
+                    DrawingTurn drawing accountId
+                rowToTurn (_, _, accountId, False, _, label) =
+                    LabelTurn label accountId
+
+        query = "SELECT \
+                \   Games.id, \
+                \   UNIX_TIMESTAMP(Games.completed_at), \
+                \   Accounts.display_name, \
+                \   Turns.is_drawing, \
+                \   Turns.drawing, \
+                \   Turns.label \
+                \From Turns as Turns \
+                \INNER JOIN ( \
+                \   SELECT id, completed_at \
+                \   FROM Games as Games\
+                \   INNER JOIN ( \
+                \       SELECT game_id FROM Turns AS T WHERE T.account_id = ? \
+                \   ) AS T ON T.game_id = Games.id \
+                \   WHERE Games.completed_at >= FROM_UNIXTIME(?) \
+                \   ORDER BY completed_at ASC \
+                \   LIMIT 10 \
+                \) AS Games ON Turns.game_id = Games.id \
+                \INNER JOIN ( \
+                \   SELECT id, display_name \
+                \   FROM Accounts as Accounts \
+                \) AS Accounts ON Turns.account_id = Accounts.id \
+                \ORDER BY Games.id ASC, Turns.id ASC"

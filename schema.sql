@@ -48,7 +48,7 @@ CREATE TABLE Sessions (
 
 CREATE TABLE Games (
   id                  INT(11)     NOT NULL AUTO_INCREMENT,
-  completed_at        TIMESTAMP,
+  completed_at        TIMESTAMP   NULL,
 
   PRIMARY KEY (id)
 );

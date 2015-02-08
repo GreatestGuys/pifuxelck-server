@@ -5,6 +5,8 @@ module Server.Structs (
 , NewGame (..)
 , ClientTurn (..)
 , InboxEntry (..)
+, Game (..)
+, Turn (..)
 ) where
 
 import Server.Encoding
@@ -19,6 +21,12 @@ import qualified Data.Text.Encoding as T
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Lazy as LBS
 
+
+drawingToText :: Value -> T.Text
+drawingToText = T.decodeUtf8 . LBS.toStrict . encode
+
+drawingToJson :: T.Text -> Maybe Value
+drawingToJson = decode . LBS.fromStrict . T.encodeUtf8
 
 data LoginRequest = LoginRequest Word64 BS.ByteString
 
@@ -81,15 +89,13 @@ instance FromJSON ClientTurn where
             "label"   -> ClientLabelTurn   <$> v .: "contents"
             otherwise -> mzero
         where
-            drawingToText :: Value -> T.Text
-            drawingToText = T.decodeUtf8 . LBS.toStrict . encode
     parseJSON _          = mzero
 
 instance ToJSON InboxEntry where
     toJSON (InboxDrawing drawing gameId) = object [
             "game_id" .= gameId
         ,   "turn"    .= object [
-                "contents" .= (decode $ LBS.fromStrict $ T.encodeUtf8 drawing :: Maybe Value)
+                "contents" .= drawingToJson drawing
             ,   "type"    .= ("drawing" :: T.Text)
             ]
         ]
@@ -99,4 +105,39 @@ instance ToJSON InboxEntry where
                 "contents" .= label
             ,   "type"  .= ("label" :: T.Text)
             ]
+        ]
+
+data Game = Game {
+        gameId      :: Word64
+    ,   completedAt :: Integer
+    ,   turns       :: [Turn]
+    }
+
+data Turn
+    = DrawingTurn {
+        drawing  :: T.Text
+    ,   player   :: T.Text
+    }
+    | LabelTurn {
+        label  :: T.Text
+    ,   player :: T.Text
+    }
+
+instance ToJSON Game where
+    toJSON (Game gameId completedAt turns) = object [
+            "game_id"      .= gameId
+        ,   "completed_at" .= completedAt
+        ,   "turns"        .= map toJSON turns
+        ]
+
+instance ToJSON Turn where
+    toJSON (DrawingTurn drawing accountId) = object [
+            "contents" .= drawingToJson drawing
+        ,   "type"     .= ("drawing" :: T.Text)
+        ,   "player"   .= accountId
+        ]
+    toJSON (LabelTurn label accountId) = object [
+            "contents" .= label
+        ,   "type"     .= ("label" :: T.Text)
+        ,   "player"   .= accountId
         ]

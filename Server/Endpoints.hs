@@ -2,6 +2,7 @@ module Server.Endpoints (
   inbox
 , findAccount
 , generic404
+, history
 , loginRequest
 , loginRespond
 , move
@@ -104,10 +105,18 @@ move :: ID -> Request -> Database -> IO Response
 move gameId req db =
     requireAccount req db $ \accountId ->
     asJson req $ \clientTurn -> do
-        let log = "Endpoints.taketurn"
+        let log = "Endpoints.move"
         Log.infoM log $ "Taking turn in game " ++ show gameId
         updateCurrentTurn gameId accountId clientTurn db
+        Log.infoM log $ "Updating completed time."
+        updateGameCompletedTime gameId db
         return $ plainTextResponse [""]
+
+history :: Integer -> Request -> Database -> IO Response
+history startTime req db = requireAccount req db $ \accountId -> do
+    let log = "Endpoints.history"
+    Log.infoM log $ "Retrieving history since " ++ show startTime
+    jsonResponse <$> getCompletedGames accountId startTime db
 
 -- | The endpoint is the beginning of the login flow. It returns a random string
 -- to the user that is to be cryptographically signed and returned. Since this
