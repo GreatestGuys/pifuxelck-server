@@ -39,5 +39,5 @@ respondWith400 = responseBuilder status400 []
                . copyByteString
 
 respondWith200 :: ByteString -> Response
-respondWith200 = responseBuilder status400 []
+respondWith200 = responseBuilder status200 []
                . copyByteString
