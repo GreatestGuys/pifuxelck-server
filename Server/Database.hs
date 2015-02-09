@@ -174,7 +174,7 @@ getAccount id connection = do
 
 addGame :: ID -> NewGame -> Sql ID
 addGame firstPlayer (NewGame players label) connection = do
-    sqlCmd_ "INSERT INTO Games (completed_at) values (NULL)" connection
+    sqlCmd_ "INSERT INTO Games (completed_at_id) values (NULL)" connection
     gameId <- insertID connection
     sqlCmd firstTurnInsertQuery (firstPlayer, gameId, label) connection
     mapM_ insertTurn $ playerValues gameId
@@ -244,17 +244,31 @@ updateCurrentTurn gameId accountId (ClientDrawingTurn drawing) connection =
                 \       WHERE T.is_complete = 0 AND T.game_id = ?)"
 
 updateGameCompletedTime :: ID -> Sql ()
-updateGameCompletedTime gameId connection =
-    sqlCmd query (gameId, gameId) connection
+updateGameCompletedTime gameId connection = do
+    sqlCmd insertQuery (gameId, gameId) connection
+    completedAtId <- insertID connection
+    if completedAtId == 0
+        then return()
+        else sqlCmd updateQuery (completedAtId, gameId) connection
     where
-        query = "UPDATE Games \
-                \SET completed_at = NOW() \
-                \WHERE id = ? \
-                \  AND completed_at IS NULL \
-                \  AND 1 = ( \
-                \       SELECT SUM(is_complete) = COUNT(*) \
-                \       FROM Turns \
-                \       WHERE game_id = ?)"
+        -- This is a terrible, terrible to hack to obtain a conditional insert.
+        insertQuery = "INSERT INTO GamesCompletedAt (completed_at) \
+                \( \
+                \   SELECT NOW() \
+                \   FROM Games \
+                \   WHERE ( \
+                \       SELECT completed_at_id \
+                \       FROM Games \
+                \       WHERE id = ?) IS NULL \
+                \     AND 1 = ( \
+                \          SELECT SUM(is_complete) = COUNT(*) \
+                \          FROM Turns \
+                \          WHERE game_id = ?) \
+                \   LIMIT 1 \
+                \)"
+        updateQuery = "UPDATE Games \
+                      \SET completed_at_id = ? \
+                      \WHERE id = ?"
 
 getCompletedGames :: ID -> Integer -> Sql [Game]
 getCompletedGames accountID startTime connection =
@@ -278,24 +292,25 @@ getCompletedGames accountID startTime connection =
 
         query = "SELECT \
                 \   Games.id, \
-                \   UNIX_TIMESTAMP(Games.completed_at), \
+                \   Games.completed_at_id, \
                 \   Accounts.display_name, \
                 \   Turns.is_drawing, \
                 \   Turns.drawing, \
                 \   Turns.label \
                 \From Turns as Turns \
                 \INNER JOIN ( \
-                \   SELECT id, completed_at \
-                \   FROM Games as Games\
+                \   SELECT id, completed_at_id \
+                \   FROM Games as Games \
                 \   INNER JOIN ( \
                 \       SELECT game_id FROM Turns AS T WHERE T.account_id = ? \
                 \   ) AS T ON T.game_id = Games.id \
-                \   WHERE Games.completed_at >= FROM_UNIXTIME(?) \
-                \   ORDER BY completed_at ASC \
+                \   WHERE Games.completed_at_id > ? \
+                \   ORDER BY completed_at_id ASC \
                 \   LIMIT 10 \
                 \) AS Games ON Turns.game_id = Games.id \
                 \INNER JOIN ( \
                 \   SELECT id, display_name \
                 \   FROM Accounts as Accounts \
                 \) AS Accounts ON Turns.account_id = Accounts.id \
+                \GROUP BY Turns.id \
                 \ORDER BY Games.id ASC, Turns.id ASC"

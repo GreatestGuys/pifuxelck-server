@@ -8,6 +8,7 @@
 
 DROP TABLE IF EXISTS Turns;
 DROP TABLE IF EXISTS Games;
+DROP TABLE IF EXISTS GamesCompletedAt;
 
 DROP TABLE IF EXISTS Sessions;
 DROP TABLE IF EXISTS LoginChallenges;
@@ -46,11 +47,20 @@ CREATE TABLE Sessions (
 );
 
 
-CREATE TABLE Games (
+CREATE TABLE GamesCompletedAt (
   id                  INT(11)     NOT NULL AUTO_INCREMENT,
   completed_at        TIMESTAMP   NULL,
 
   PRIMARY KEY (id)
+);
+
+
+CREATE TABLE Games (
+  id                  INT(11)     NOT NULL AUTO_INCREMENT,
+  completed_at_id     INT(11)     NULL,
+
+  PRIMARY KEY (id),
+  FOREIGN KEY (completed_at_id) REFERENCES GamesCompletedAt (id)
 );
 
 
