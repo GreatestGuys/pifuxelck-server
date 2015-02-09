@@ -86,6 +86,7 @@ app connectInfo req respond = do
     Log.debugM log $ "Incoming request: " ++ show req
     db <- connect connectInfo
     response <- case pathInfo req of
+        []                                           -> generic200
         ["account", "lookup", name]                  -> findAccount name req db
         ["account"]                                  -> newaccount req db
         ["history", t] | Just t' <- textToInt t      -> history t' req db

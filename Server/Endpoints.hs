@@ -1,6 +1,7 @@
 module Server.Endpoints (
   inbox
 , findAccount
+, generic200
 , generic404
 , history
 , loginRequest
@@ -80,6 +81,10 @@ requireAccount request db f = do
 generic404 :: IO Response
 generic404 = return
            $ respondWith404 "You can't dry a bug!"
+
+generic200 :: IO Response
+generic200 = return
+           $ respondWith200 ""
 
 -- | This endpoint creates a new game with a
 newgame :: Request -> Database -> IO Response
