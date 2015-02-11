@@ -71,29 +71,31 @@ startServer Options{..} = do
     Log.infoM log $ "\tPort = " ++ show mysqlPort
     Log.infoM log $ "\tUser = " ++ mysqlUser
     Log.infoM log $ "\tDB = " ++ mysqlDb
-    connection <- connect
-                $ defaultConnectInfo { connectHost = mysqlHost
-                                     , connectPort = fromIntegral $ mysqlPort
-                                     , connectUser = mysqlUser
-                                     , connectPassword = mysqlPassword
-                                     , connectDatabase = mysqlDb
-                                     }
+    let config = defaultConnectInfo { connectHost = mysqlHost
+                                    , connectPort = fromIntegral $ mysqlPort
+                                    , connectUser = mysqlUser
+                                    , connectPassword = mysqlPassword
+                                    , connectDatabase = mysqlDb
+                                    }
     Log.infoM log $ "Listening on port " ++ show port ++ "."
-    run port (app connection)
+    run port (app config)
 
-app :: Database -> Request -> (Response -> IO b) -> IO b
-app db req respond = do
+app :: ConnectInfo -> Request -> (Response -> IO b) -> IO b
+app connectInfo req respond = do
     let log = "Main.app"
     Log.debugM log $ "Incoming request: " ++ show req
+    db <- connect connectInfo
     response <- case pathInfo req of
-        ["inbox"]                                    -> inbox req db
-        ["newgame"]                                  -> newgame req db
-        ["move", id] | Just id' <- textToId id       -> move id' req db
-        ["inbox"]                                    -> inbox req db
-        ["account"]                                  -> newaccount req db
+        []                                           -> generic200
         ["account", "lookup", name]                  -> findAccount name req db
+        ["account"]                                  -> newaccount req db
+        ["history", t] | Just t' <- textToInt t      -> history t' req db
+        ["inbox"]                                    -> inbox req db
+        ["inbox"]                                    -> inbox req db
         ["login", "0", id] | Just id' <- textToId id -> loginRequest id' req db
         ["login", "1", id] | Just id' <- textToId id -> loginRespond id' req db
+        ["move", id] | Just id' <- textToId id       -> move id' req db
+        ["newgame"]                                  -> newgame req db
         path                                         -> do
             Log.warningM log $ "404 unknown path: " ++ show path
             generic404
@@ -102,6 +104,10 @@ app db req respond = do
 textToId :: T.Text -> Maybe ID
 textToId text | Right (id, _) <- T.decimal text = Just id
               | otherwise                       = Nothing
+
+textToInt :: T.Text -> Maybe Integer
+textToInt text | Right (i, _) <- T.decimal text = Just i
+               | otherwise                      = Nothing
 
 -- | Setup logging to STDERR, and two output files, a noisy one containing all
 -- INFO messages and above and one containing just errors.

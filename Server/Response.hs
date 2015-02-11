@@ -1,6 +1,7 @@
 module Server.Response (
   jsonResponse
 , plainTextResponse
+, respondWith200
 , respondWith400
 , respondWith403
 , respondWith404
@@ -35,4 +36,8 @@ respondWith403 = responseBuilder status403 []
 
 respondWith400 :: ByteString -> Response
 respondWith400 = responseBuilder status400 []
+               . copyByteString
+
+respondWith200 :: ByteString -> Response
+respondWith200 = responseBuilder status200 []
                . copyByteString
