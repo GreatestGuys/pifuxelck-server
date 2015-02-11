@@ -71,7 +71,7 @@ CREATE TABLE Turns (
   is_complete         BOOLEAN     NOT NULL,
   is_drawing          BOOLEAN     NOT NULL,
   label               TEXT        NOT NULL,
-  drawing             TEXT        NOT NULL,
+  drawing             MEDIUMTEXT  NOT NULL,
 
   PRIMARY KEY (id),
   FOREIGN KEY (account_id) REFERENCES Accounts (id),
