@@ -50,7 +50,7 @@ asJson request f = do
         errorResponse body = do
             Log.warningM log "Unable to parse JSON."
             Log.debugM log $ "\tProblematic JSON: " ++ show body
-            return $ respondWith400 "Failed to parse JSON."
+            respondWith400 "Failed to parse JSON."
 
 
 -- | A utility function that can be used to ensure that a request is properly
@@ -72,19 +72,17 @@ requireAccount request db f = do
 
         errorResponse = do
             Log.debugM log "Unable to verify logged in status."
-            return $ respondWith403 "Not logged in."
+            respondWith403 "Not logged in."
 
         authHeader = listToMaybe $ snd <$> filter (isAuthHeader . fst) headers
         isAuthHeader = (== "x-pifuxelck-auth")
         headers = requestHeaders request
 
 generic404 :: IO Response
-generic404 = return
-           $ respondWith404 "You can't dry a bug!"
+generic404 = respondWith404 "You can't dry a bug!"
 
 generic200 :: IO Response
-generic200 = return
-           $ respondWith200 ""
+generic200 = respondWith200 ""
 
 -- | This endpoint creates a new game with a
 newgame :: Request -> Database -> IO Response
@@ -96,7 +94,7 @@ newgame req db =
         shuffledPlayers <- shuffleM players
         gameId <- addGame accountId (NewGame shuffledPlayers label) db
         Log.infoM log $ "Created game: " ++ show gameId
-        return $ plainTextResponse [""]
+        plainTextResponse [""]
 
 inbox :: Request -> Database -> IO Response
 inbox req db = requireAccount req db $ \accountId -> do
@@ -104,7 +102,7 @@ inbox req db = requireAccount req db $ \accountId -> do
     Log.infoM log $ "Looking up inbox for account: " ++ show accountId
     turns <- getActiveTurnsForPlayer accountId db
     Log.infoM log $ "Found " ++ show (length turns) ++ " entries"
-    jsonResponse <$> getActiveTurnsForPlayer accountId db
+    jsonResponse =<< getActiveTurnsForPlayer accountId db
 
 move :: ID -> Request -> Database -> IO Response
 move gameId req db =
@@ -115,13 +113,13 @@ move gameId req db =
         updateCurrentTurn gameId accountId clientTurn db
         Log.infoM log $ "Updating completed time."
         updateGameCompletedTime gameId db
-        return $ plainTextResponse [""]
+        plainTextResponse [""]
 
 history :: Integer -> Request -> Database -> IO Response
 history startTime req db = requireAccount req db $ \accountId -> do
     let log = "Endpoints.history"
     Log.infoM log $ "Retrieving history since " ++ show startTime
-    jsonResponse <$> getCompletedGames accountId startTime db
+    jsonResponse =<< getCompletedGames accountId startTime db
 
 -- | The endpoint is the beginning of the login flow. It returns a random string
 -- to the user that is to be cryptographically signed and returned. Since this
@@ -136,7 +134,7 @@ loginRequest userId req db = do
     Log.infoM log $ concat [
             "New challenge (", show challengeId, ") "
         ,   "created for user ", show userId, "."]
-    return $ jsonResponse $ LoginRequest challengeId challenge
+    jsonResponse $ LoginRequest challengeId challenge
 
 randomBytes :: DRBG.ByteLength -> IO BS.ByteString
 randomBytes size = do
@@ -175,7 +173,7 @@ loginRespond challengeId req db = do
         lift $ addSession userId authToken db
         lift $ Log.infoM log "Login success."
         return [T.encodeUtf8 authToken]
-    return $ fromMaybe errorResponse (plainTextResponse <$> authToken)
+    maybe errorResponse plainTextResponse authToken
     where
         errorResponse = respondWith403 "Invalid challenge response."
 
@@ -204,7 +202,7 @@ newaccount req db = asJson req $ \account -> do
     Log.infoM log "Processing account creation request."
     userId <- addAccount account db
     Log.infoM log $ "Created account: " ++ show userId
-    return $ fromMaybe errorResponse (idToResponse <$> userId)
+    maybe errorResponse idToResponse userId
     where
         errorResponse = respondWith403 "Already registered."
 
@@ -217,11 +215,11 @@ findAccount name req db = requireAccount req db $ \_ -> do
     Log.infoM log $ "Looking up user ID for '" ++ T.unpack name ++ "'."
     userId <- accountIdForName name db
     Log.infoM log $ "Found corresponding user ID '" ++ show userId ++ "'."
-    return $ fromMaybe errorResponse (idToResponse <$> userId)
+    maybe errorResponse idToResponse userId
     where
         errorResponse = respondWith404 "No such account."
 
-idToResponse :: ID -> Response
+idToResponse :: ID -> IO Response
 idToResponse = plainTextResponse
     . return    -- ByteString -> [ByteString]
     . CBS.pack  -- String -> ByteString
