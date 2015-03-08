@@ -235,24 +235,32 @@ updateCurrentTurn :: ID -> ID -> ClientTurn -> Sql ()
 updateCurrentTurn gameId accountId (ClientLabelTurn label) connection =
     sqlCmd query (label, accountId, gameId, gameId) connection
     where
-        query = "UPDATE Turns \
-                \SET label = ?, is_complete = 1 \
-                \WHERE account_id = ? \
-                \  AND game_id = ? \
-                \  AND is_drawing = 0 \
-                \  AND id = ( \
+        query = "UPDATE Turns, Games \
+                \SET \
+                \   Turns.label = ?, \
+                \   Turns.is_complete = 1, \
+                \   Games.next_expiration = NOW() + INTERVAL 2 DAY \
+                \WHERE Turns.game_id = Games.id \
+                \  AND Turns.account_id = ? \
+                \  AND Turns.game_id = ? \
+                \  AND Turns.is_drawing = 0 \
+                \  AND Turns.id = ( \
                 \       SELECT MIN(T.id) \
                 \       FROM (SELECT * FROM Turns) AS T \
                 \       WHERE T.is_complete = 0 AND T.game_id = ?)"
 updateCurrentTurn gameId accountId (ClientDrawingTurn drawing) connection =
     sqlCmd query (drawing, accountId, gameId, gameId) connection
     where
-        query = "UPDATE Turns \
-                \SET drawing = ?, is_complete = 1 \
-                \WHERE account_id = ? \
-                \  AND game_id = ? \
-                \  AND is_drawing = 1 \
-                \  AND id = ( \
+        query = "UPDATE Turns, Games \
+                \SET \
+                \   drawing = ?, \
+                \   is_complete = 1, \
+                \   Games.next_expiration = NOW() + INTERVAL 2 DAY \
+                \WHERE Turns.game_id = Games.id \
+                \  AND Turns.account_id = ? \
+                \  AND Turns.game_id = ? \
+                \  AND Turns.is_drawing = 1 \
+                \  AND Turns.id = ( \
                 \       SELECT MIN(T.id) \
                 \       FROM (SELECT * FROM Turns) AS T \
                 \       WHERE T.is_complete = 0 AND T.game_id = ?)"
