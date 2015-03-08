@@ -99,6 +99,8 @@ newgame req db =
 inbox :: Request -> Database -> IO Response
 inbox req db = requireAccount req db $ \accountId -> do
     let log = "Endpoints.inbox"
+    Log.infoM log $ "Reaping turns that have expired."
+    reapExpiredTurns db
     Log.infoM log $ "Looking up inbox for account: " ++ show accountId
     turns <- getActiveTurnsForPlayer accountId db
     Log.infoM log $ "Found " ++ show (length turns) ++ " entries"

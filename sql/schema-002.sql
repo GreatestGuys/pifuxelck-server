@@ -1,10 +1,10 @@
 -- -----------------------------------------------------------------------------
--- Pifuxel Schema v1
+-- Pifuxel Schema v2
 --
 -- This script will blow away existing tables and create new ones in there
 -- place. To use:
 --
---    mysql -h $HOST -u $USER --password $DB < schema.sql
+--    mysql -h $HOST -u $USER --password $DB < schema-002.sql
 
 DROP TABLE IF EXISTS Turns;
 DROP TABLE IF EXISTS Games;
@@ -58,6 +58,7 @@ CREATE TABLE GamesCompletedAt (
 CREATE TABLE Games (
   id                  INT(11)     NOT NULL AUTO_INCREMENT,
   completed_at_id     INT(11)     NULL,
+  next_expiration     TIMESTAMP   NULL,
 
   PRIMARY KEY (id),
   FOREIGN KEY (completed_at_id) REFERENCES GamesCompletedAt (id)

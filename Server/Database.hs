@@ -21,6 +21,7 @@ module Server.Database (
 , getCompletedGames
 , updateCurrentTurn
 , updateGameCompletedTime
+, reapExpiredTurns
 
 , connect
 , defaultConnectInfo
@@ -102,13 +103,16 @@ deleteChallenge id =
 
 addSession :: ID -> T.Text -> Sql ()
 addSession userId authToken connection = do
-    timestamp <- round <$> getPOSIXTime :: IO Word64
-    let values = (authToken, userId, timestamp)
+    let values = (authToken, userId)
     sqlCmd query values connection
+    sqlCmd_ pruneQuery connection
     where
         query = "INSERT INTO Sessions \
-            \(auth_token, account_id, created_at) \
-            \VALUES (?, ?, ?)"
+            \(auth_token, account_id) \
+            \VALUES (?, ?)"
+        pruneQuery =
+            "DELETE FROM Sessions \
+            \WHERE created_at < NOW() - INTERVAL 7 DAY"
 
 accountIdForSession :: T.Text -> Sql (Maybe ID)
 accountIdForSession authToken connection = do
@@ -174,24 +178,34 @@ getAccount id connection = do
 
 addGame :: ID -> NewGame -> Sql ID
 addGame firstPlayer (NewGame players label) connection = do
-    sqlCmd_ "INSERT INTO Games (completed_at_id) values (NULL)" connection
+    sqlCmd_ createGameQuery connection
     gameId <- insertID connection
     sqlCmd firstTurnInsertQuery (firstPlayer, gameId, label) connection
     mapM_ insertTurn $ playerValues gameId
     return gameId
     where
         insertTurn values = sqlCmd turnInsertQuery values connection
+        createGameQuery =
+            "INSERT INTO Games \
+            \( completed_at_id \
+            \, next_expiration \
+            \) VALUES (NULL, NOW() + INTERVAL 2 DAY)"
         firstTurnInsertQuery =
             "INSERT INTO Turns \
             \(account_id, game_id, is_complete, is_drawing, label, drawing) \
-            \ values (?, ?, 1, 0, ?, '')"
+            \ VALUES (?, ?, 1, 0, ?, '')"
         turnInsertQuery =
             "INSERT INTO Turns \
-            \(account_id, game_id, is_complete, is_drawing, label, drawing) \
-            \ values (?, ?, 0, ?, '', '')"
+            \( account_id \
+            \, game_id \
+            \, is_complete \
+            \, is_drawing \
+            \, label \
+            \, drawing \
+            \) VALUES (?, ?, 0, ?, '', '')"
         playerValues gameId = [ (playerId, gameId, isDrawing)
-                              | playerId  <- players
-                              | isDrawing <- cycle [True, False] ]
+                              | playerId   <- players
+                              | isDrawing  <- cycle [True, False]]
 
 getActiveTurnsForPlayer :: ID -> Sql [InboxEntry]
 getActiveTurnsForPlayer userId connection =
@@ -314,3 +328,37 @@ getCompletedGames accountID startTime connection =
                 \) AS Accounts ON Turns.account_id = Accounts.id \
                 \GROUP BY Turns.id \
                 \ORDER BY Games.id ASC, Turns.id ASC"
+
+reapExpiredTurns :: Sql ()
+reapExpiredTurns connection = withTransaction connection $ do
+    sqlCmd_ deleteExpiredGames connection
+    sqlCmd_ updateRemainingTurns connection
+    sqlCmd_ updateExpiredTime connection
+    where
+        deleteExpiredGames =
+            "DELETE Turns FROM Turns \
+            \INNER JOIN (\
+            \   SELECT \
+            \       game_id, \
+            \       MIN(id) as next_id \
+            \   FROM Turns \
+            \   WHERE is_complete = 0 \
+            \   GROUP BY game_id \
+            \) AS NextTurn ON NextTurn.next_id = Turns.id \
+            \INNER JOIN (\
+            \   SELECT id FROM Games \
+            \   WHERE next_expiration < NOW() \
+            \) AS Games ON Games.id = Turns.game_id \
+            \WHERE Turns.id = NextTurn.next_id"
+        updateRemainingTurns =
+            "UPDATE Turns \
+            \INNER JOIN (\
+            \   SELECT id FROM Games \
+            \   WHERE next_expiration < NOW() \
+            \) AS Games ON Games.id = Turns.game_id \
+            \SET is_drawing = NOT is_drawing \
+            \WHERE is_complete = 0"
+        updateExpiredTime =
+            "UPDATE Games \
+            \SET next_expiration = NOW() + INTERVAL 2 DAY \
+            \WHERE next_expiration < NOW()"
