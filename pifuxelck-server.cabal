@@ -40,6 +40,7 @@ executable pifuxelck-server
     , transformers >= 0.3
     , utf8-string >= 0.3.8
     , wai >= 3.0.2
+    , wai-extra >= 3.0.2
     , warp >= 3.0.2.3
   default-extensions:
       OverloadedStrings

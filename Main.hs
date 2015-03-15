@@ -7,8 +7,10 @@ import Server.Database
 import Server.Endpoints
 
 import Control.Applicative
-import Network.Wai (pathInfo, Request, Response)
+import Network.Wai (pathInfo, Request, Response, Middleware, ResponseReceived)
 import Network.Wai.Handler.Warp
+import Network.Wai.Middleware.Gzip (gzip, def)
+import Network.Wai.Middleware.AddHeaders (addHeaders)
 import System.Environment (getArgs)
 import Options.Applicative
 
@@ -78,9 +80,12 @@ startServer Options{..} = do
                                     , connectDatabase = mysqlDb
                                     }
     Log.infoM log $ "Listening on port " ++ show port ++ "."
-    run port (app config)
+    run port $ addCorsHeaders $ gzip def $ app config
 
-app :: ConnectInfo -> Request -> (Response -> IO b) -> IO b
+addCorsHeaders :: Middleware
+addCorsHeaders = addHeaders [("Access-Control-Allow-Origin:", "*")]
+
+app :: ConnectInfo -> Request -> (Response -> IO ResponseReceived) -> IO ResponseReceived
 app connectInfo req respond = do
     let log = "Main.app"
     Log.debugM log $ "Incoming request: " ++ show req
@@ -90,7 +95,6 @@ app connectInfo req respond = do
         ["account", "lookup", name]                  -> findAccount name req db
         ["account"]                                  -> newaccount req db
         ["history", t] | Just t' <- textToInt t      -> history t' req db
-        ["inbox"]                                    -> inbox req db
         ["inbox"]                                    -> inbox req db
         ["login", "0", id] | Just id' <- textToId id -> loginRequest id' req db
         ["login", "1", id] | Just id' <- textToId id -> loginRespond id' req db
