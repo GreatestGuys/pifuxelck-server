@@ -83,7 +83,7 @@ startServer Options{..} = do
     run port $ addCorsHeaders $ gzip def $ app config
 
 addCorsHeaders :: Middleware
-addCorsHeaders = addHeaders [("Access-Control-Allow-Origin:", "*")]
+addCorsHeaders = addHeaders [("Access-Control-Allow-Origin", "*")]
 
 app :: ConnectInfo -> Request -> (Response -> IO ResponseReceived) -> IO ResponseReceived
 app connectInfo req respond = do
