@@ -2,6 +2,7 @@ module Server.Endpoints (
   inbox
 , findAccount
 , generic200
+, generic204
 , generic404
 , history
 , loginRequest
@@ -83,6 +84,9 @@ generic404 = respondWith404 "You can't dry a bug!"
 
 generic200 :: IO Response
 generic200 = respondWith200 ""
+
+generic204 :: IO Response
+generic204 = respondWith204 ""
 
 -- | This endpoint creates a new game with a
 newgame :: Request -> Database -> IO Response

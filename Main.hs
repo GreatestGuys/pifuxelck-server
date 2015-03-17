@@ -7,15 +7,15 @@ import Server.Database
 import Server.Endpoints
 
 import Control.Applicative
-import Network.Wai (pathInfo, Request, Response, Middleware, ResponseReceived)
 import Network.Wai.Handler.Warp
-import Network.Wai.Middleware.Gzip (gzip, def)
-import Network.Wai.Middleware.AddHeaders (addHeaders)
 import System.Environment (getArgs)
 import Options.Applicative
 
 import qualified Data.Text as T
 import qualified Data.Text.Read as T
+import qualified Network.Wai as Wai
+import qualified Network.Wai.Middleware.AddHeaders as Wai
+import qualified Network.Wai.Middleware.Gzip as Wai
 import qualified System.IO as IO (stderr, Handle)
 import qualified System.Log.Formatter as Log
 import qualified System.Log.Handler as Log (setFormatter)
@@ -80,17 +80,28 @@ startServer Options{..} = do
                                     , connectDatabase = mysqlDb
                                     }
     Log.infoM log $ "Listening on port " ++ show port ++ "."
-    run port $ addCorsHeaders $ gzip def $ app config
+    run port $ addCorsHeaders $ Wai.gzip Wai.def $ app config
 
-addCorsHeaders :: Middleware
-addCorsHeaders = addHeaders [("Access-Control-Allow-Origin", "*")]
+addCorsHeaders :: Wai.Middleware
+addCorsHeaders = Wai.addHeaders [
+        ("Access-Control-Allow-Origin", "*")
+    ,   ("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+    ,   ("Access-Control-Allow-Headers", "x-pifuxelck-auth")
+    ]
 
-app :: ConnectInfo -> Request -> (Response -> IO ResponseReceived) -> IO ResponseReceived
+app :: ConnectInfo -> Wai.Application
 app connectInfo req respond = do
     let log = "Main.app"
     Log.debugM log $ "Incoming request: " ++ show req
     db <- connect connectInfo
-    response <- case pathInfo req of
+    if Wai.requestMethod req == "OPTIONS"
+    then generic204 >>= respond
+    else route db req respond
+
+route :: Database -> Wai.Application
+route db req respond = do
+    let log = "Main.route"
+    response <- case Wai.pathInfo req of
         []                                           -> generic200
         ["account", "lookup", name]                  -> findAccount name req db
         ["account"]                                  -> newaccount req db
