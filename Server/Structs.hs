@@ -1,5 +1,6 @@
 module Server.Structs (
-  Account(..)
+  PasswordAccount(..)
+, RsaAccount(..)
 , Challenge (..)
 , LoginRequest (..)
 , NewGame (..)
@@ -16,10 +17,10 @@ import Control.Monad (mzero)
 import Data.Aeson
 import Data.Word
 
-import qualified Data.Text as T
-import qualified Data.Text.Encoding as T
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Lazy as LBS
+import qualified Data.Text as T
+import qualified Data.Text.Encoding as T
 
 
 drawingToText :: Value -> T.Text
@@ -41,19 +42,29 @@ data Challenge = Challenge {
     ,   accountId       :: Word64
     }
 
-data Account = Account {
+data RsaAccount = RsaAccount {
         exponent          :: Integer
     ,   modulus           :: Integer
     ,   displayName       :: T.Text
     ,   hashedPhoneNumber :: Maybe T.Text
     }
+data PasswordAccount = PasswordAccount {
+        pwDisplayName :: T.Text
+    ,   password    :: T.Text
+    }
 
-instance FromJSON Account where
-  parseJSON (Object v) = Account
+instance FromJSON RsaAccount where
+  parseJSON (Object v) = RsaAccount
       <$> (base64ToInteger <$> ((v .: "public_key") >>= (.: "exponent")))
       <*> (base64ToInteger <$> ((v .: "public_key") >>= (.: "modulus")))
       <*> v .: "display_name"
       <*> v .: "hashed_phone"
+  parseJSON _          = mzero
+
+instance FromJSON PasswordAccount where
+  parseJSON (Object v) = PasswordAccount
+      <$> v .: "display_name"
+      <*> v .: "password"
   parseJSON _          = mzero
 
 data NewGame = NewGame {

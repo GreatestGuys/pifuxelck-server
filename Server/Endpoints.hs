@@ -7,8 +7,10 @@ module Server.Endpoints (
 , history
 , loginRequest
 , loginRespond
+, loginWithPassword
 , move
-, newaccount
+, newRsaAccount
+, newPWAccount
 , newgame
 ) where
 
@@ -19,8 +21,10 @@ import Server.Structs
 
 import Control.Applicative
 import Control.Monad
+import Control.Monad.IO.Class
 import Control.Monad.Trans.Class
 import Control.Monad.Trans.Maybe
+import Crypto.BCrypt
 import Data.Aeson (decode, FromJSON)
 import Data.Maybe
 import Network.Wai (strictRequestBody, requestHeaders, Request, Response)
@@ -168,7 +172,7 @@ loginRespond challengeId req db = do
 
         lift $ Log.debugM log "Looking up user from challenge info."
         let userId = accountId $ challenge
-        account <- MaybeT $ getAccount userId db
+        account <- MaybeT $ getRsaAccount userId db
 
         lift $ Log.debugM log "Verifying signature."
         lift $ Log.debugM log $ "Sig size: " ++ show (LBS.length signature)
@@ -183,7 +187,7 @@ loginRespond challengeId req db = do
     where
         errorResponse = respondWith403 "Invalid challenge response."
 
-        verifySig Account{exponent=e, modulus=n}
+        verifySig RsaAccount{exponent=e, modulus=n}
                   Challenge{challengeString=challenge} =
             let publicKey = RSA.PublicKey {
                     RSA.public_size = 256  -- key size in bytes (2048 bits)
@@ -198,15 +202,48 @@ loginRespond challengeId req db = do
         lbs64ToLbs = bs64ToLbs . LBS.toStrict
         bs64ToLbs = LBS.fromStrict . base64ToByteString . T.decodeUtf8
 
+-- | The endpoint will allow a user to login using a password.
+loginWithPassword :: Request -> Database -> IO Response
+loginWithPassword req db = asJson req $ \pwAccount -> do
+    let log = "Endpoints.loginWithPassword"
+    Log.infoM log "Obtaining user's hash."
+    authToken <- runMaybeT $ do
+        (userId, hash) <- MaybeT $ getPasswordHash (pwDisplayName pwAccount) db
+        liftIO $ Log.infoM log "Validating password against hash."
+        guard $ validatePassword hash (p $ password pwAccount)
+        liftIO $ Log.infoM log "Password id valid!"
+        authToken <- byteStringToBase64 <$> (liftIO $ randomBytes 32)
+        liftIO $ addSession userId authToken db
+        liftIO $ Log.infoM log "Login success."
+        return [T.encodeUtf8 authToken]
+    maybe errorResponse plainTextResponse authToken
+    where
+        errorResponse = respondWith403 "Invalid credentials."
+        p = T.encodeUtf8
+
 -- | This endpoint attempts to parse the request body from a json object
 -- into an Account. If successful it adds the new account information into
 -- the MySQL database and returns in plaintext the newly created account's
 -- unique identifier. On failure it returns a 400.
-newaccount :: Request -> Database -> IO Response
-newaccount req db = asJson req $ \account -> do
-    let log = "Endpoints.newaccount"
+newRsaAccount :: Request -> Database -> IO Response
+newRsaAccount req db = asJson req $ \account -> do
+    let log = "Endpoints.newRsaAccount"
     Log.infoM log "Processing account creation request."
-    userId <- addAccount account db
+    userId <- addRsaAccount account db
+    Log.infoM log $ "Created account: " ++ show userId
+    maybe errorResponse idToResponse userId
+    where
+        errorResponse = respondWith403 "Already registered."
+
+-- | This endpoint attempts to parse the request body from a json object
+-- into an Account. If successful it adds the new account information into
+-- the MySQL database and returns in plaintext the newly created account's
+-- unique identifier. On failure it returns a 400.
+newPWAccount :: Request -> Database -> IO Response
+newPWAccount req db = asJson req $ \account -> do
+    let log = "Endpoints.newPWAccount"
+    Log.infoM log "Processing account creation request."
+    userId <- addPasswordAccount account db
     Log.infoM log $ "Created account: " ++ show userId
     maybe errorResponse idToResponse userId
     where

@@ -5,9 +5,11 @@ module Server.Database (
 , ID
 , Sql
 
-, addAccount
-, getAccount
+, addRsaAccount
+, addPasswordAccount
+, getRsaAccount
 , accountIdForName
+, getPasswordHash
 
 , addChallenge
 , getChallenge
@@ -34,7 +36,9 @@ import Server.Encoding
 import Control.Applicative
 import Control.Exception
 import Control.Monad
+import Control.Monad.IO.Class
 import Control.Monad.Trans.Maybe
+import Crypto.BCrypt
 import Data.List
 import Data.Maybe
 import Data.Time.Clock.POSIX
@@ -46,6 +50,7 @@ import Database.MySQL.Simple.QueryResults
 
 import qualified Data.ByteString as BS
 import qualified Data.Text as T
+import qualified Data.Text.Encoding as T
 
 
 type ID = Word64
@@ -125,8 +130,8 @@ accountIdForSession authToken connection = do
 --------------------------------------------------------------------------------
 -- Account CRUD
 
-addAccount :: Account -> Sql (Maybe ID)
-addAccount (Account exponent modulus name Nothing) connection =
+addRsaAccount :: RsaAccount -> Sql (Maybe ID)
+addRsaAccount (RsaAccount exponent modulus name Nothing) connection =
     (sqlCmd query values connection >> (Just <$> insertID connection))
         `catch` (\(_ :: MySQLError) -> return Nothing)
     where
@@ -134,7 +139,7 @@ addAccount (Account exponent modulus name Nothing) connection =
             \(key_exponent, key_modulus, display_name) \
             \values (?, ?, ?)"
         values = (integerToBytes exponent, integerToBytes modulus, name)
-addAccount (Account exponent modulus name (Just number)) connection =
+addRsaAccount (RsaAccount exponent modulus name (Just number)) connection =
     (sqlCmd query values connection >> (Just <$> insertID connection))
         `catch` (\(_ :: MySQLError) -> return Nothing)
     where
@@ -142,6 +147,18 @@ addAccount (Account exponent modulus name (Just number)) connection =
             \(key_exponent, key_modulus, display_name, hashed_phone_number) \
             \values (?, ?, ?, ?)"
         values = (integerToBytes exponent, integerToBytes modulus, name, number)
+
+addPasswordAccount :: PasswordAccount -> Sql (Maybe ID)
+addPasswordAccount (PasswordAccount name password) connection = do
+    passwordHash <- liftIO $ hashPasswordUsingPolicy slowerBcryptHashingPolicy
+                           $ T.encodeUtf8 password
+    let values = (name, passwordHash)
+    (sqlCmd query values connection >> (Just <$> insertID connection))
+        `catch` (\(_ :: MySQLError) -> return Nothing)
+    where
+        query = "INSERT INTO Accounts \
+              \(display_name, password_hash) \
+              \VALUES (?, ?)"
 
 accountIdForName :: T.Text -> Sql (Maybe ID)
 accountIdForName name connection = do
@@ -156,12 +173,12 @@ accountIdForName name connection = do
             \WHERE display_name = ?"
         values = Only name
 
-getAccount :: ID -> Sql (Maybe Account)
-getAccount id connection = do
+getRsaAccount :: ID -> Sql (Maybe RsaAccount)
+getRsaAccount id connection = do
     let results = listToMaybe <$> sqlQuery query values connection
     runMaybeT $ do
         (exponent, modulus, displayName, phone) <- MaybeT results
-        return $ Account
+        return $ RsaAccount
             (bytesToInteger exponent)
             (bytesToInteger modulus)
             displayName
@@ -172,6 +189,13 @@ getAccount id connection = do
             \FROM Accounts \
             \WHERE id = ?"
         values = Only $ show id
+
+getPasswordHash :: T.Text -> Sql (Maybe (ID, BS.ByteString))
+getPasswordHash displayName connection = do
+        listToMaybe <$> sqlQuery query values connection
+    where
+        query = "SELECT id, password_hash FROM Accounts WHERE display_name = ?"
+        values = Only $ displayName
 
 --------------------------------------------------------------------------------
 -- Game CRUD

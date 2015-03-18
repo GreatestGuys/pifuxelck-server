@@ -104,11 +104,13 @@ route db req respond = do
     response <- case Wai.pathInfo req of
         []                                           -> generic200
         ["account", "lookup", name]                  -> findAccount name req db
-        ["account"]                                  -> newaccount req db
+        ["account"]                                  -> newRsaAccount req db
+        ["account", "register"]                      -> newPWAccount req db
         ["history", t] | Just t' <- textToInt t      -> history t' req db
         ["inbox"]                                    -> inbox req db
         ["login", "0", id] | Just id' <- textToId id -> loginRequest id' req db
         ["login", "1", id] | Just id' <- textToId id -> loginRespond id' req db
+        ["login", "password"]                        -> loginWithPassword req db
         ["move", id] | Just id' <- textToId id       -> move id' req db
         ["newgame"]                                  -> newgame req db
         path                                         -> do
