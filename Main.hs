@@ -16,6 +16,9 @@ import qualified Data.Text.Read as T
 import qualified Network.Wai as Wai
 import qualified Network.Wai.Middleware.AddHeaders as Wai
 import qualified Network.Wai.Middleware.Gzip as Wai
+import qualified Network.Wai.Middleware.Prometheus as Prom
+import qualified Prometheus as Prom
+import qualified Prometheus.Metric.GHC as Prom
 import qualified System.IO as IO (stderr, Handle)
 import qualified System.Log.Formatter as Log
 import qualified System.Log.Handler as Log (setFormatter)
@@ -80,7 +83,11 @@ startServer Options{..} = do
                                     , connectDatabase = mysqlDb
                                     }
     Log.infoM log $ "Listening on port " ++ show port ++ "."
-    run port $ addCorsHeaders $ Wai.gzip Wai.def $ app config
+    Prom.register Prom.ghcMetrics
+    run port $ addCorsHeaders
+             $ Wai.gzip Wai.def
+             $ Prom.prometheus Prom.def { Prom.prometheusInstrumentApp = False }
+             $ app config
 
 addCorsHeaders :: Wai.Middleware
 addCorsHeaders = Wai.addHeaders [
@@ -95,7 +102,7 @@ app connectInfo req respond = do
     Log.debugM log $ "Incoming request: " ++ show req
     db <- connect connectInfo
     if Wai.requestMethod req == "OPTIONS"
-    then generic204 >>= respond
+    then Prom.instrumentIO "cors" (generic204 >>= respond)
     else route db req respond
 
 route :: Database -> Wai.Application

@@ -22,7 +22,7 @@ executable pifuxelck-server
       DRBG >= 0.5
     , RSA >= 2.1
     , aeson >= 0.8.0.2
-    , base >=4.6 && <4.7
+    , base >=4.6 && <4.8
     , base64-bytestring >= 0.1.1.0
     , bcrypt >= 0.0.6
     , binary >= 0.5
@@ -43,6 +43,9 @@ executable pifuxelck-server
     , wai >= 3.0.2
     , wai-extra >= 3.0.2
     , warp >= 3.0.2.3
+    , prometheus-client
+    , prometheus-metrics-ghc
+    , wai-middleware-prometheus
   default-extensions:
       OverloadedStrings
   default-language:    Haskell2010

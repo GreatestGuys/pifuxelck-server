@@ -39,6 +39,7 @@ import qualified Data.ByteString.Char8 as CBS
 import qualified Data.ByteString.Lazy as LBS
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as T
+import qualified Network.Wai.Middleware.Prometheus as Prom
 import qualified System.Log.Logger as Log
 
 
@@ -94,7 +95,7 @@ generic204 = respondWith204 ""
 
 -- | This endpoint creates a new game with a
 newgame :: Request -> Database -> IO Response
-newgame req db =
+newgame req db = Prom.instrumentIO "newgame" $
     requireAccount req db $ \accountId ->
     asJson req $ \(NewGame players label) -> do
         let log = "Endpoints.newgame"
@@ -105,7 +106,9 @@ newgame req db =
         plainTextResponse [""]
 
 inbox :: Request -> Database -> IO Response
-inbox req db = requireAccount req db $ \accountId -> do
+inbox req db = Prom.instrumentIO "inbox"
+             $ requireAccount req db
+             $ \accountId -> do
     let log = "Endpoints.inbox"
     Log.infoM log $ "Reaping turns that have expired."
     reapExpiredTurns db
@@ -115,7 +118,7 @@ inbox req db = requireAccount req db $ \accountId -> do
     jsonResponse =<< getActiveTurnsForPlayer accountId db
 
 move :: ID -> Request -> Database -> IO Response
-move gameId req db =
+move gameId req db = Prom.instrumentIO "move" $
     requireAccount req db $ \accountId ->
     asJson req $ \clientTurn -> do
         let log = "Endpoints.move"
@@ -126,7 +129,8 @@ move gameId req db =
         plainTextResponse [""]
 
 history :: Integer -> Request -> Database -> IO Response
-history startTime req db = requireAccount req db $ \accountId -> do
+history startTime req db = Prom.instrumentIO "history"
+                         $ requireAccount req db $ \accountId -> do
     let log = "Endpoints.history"
     Log.infoM log $ "Retrieving history since " ++ show startTime
     jsonResponse =<< getCompletedGames accountId startTime db
@@ -136,7 +140,7 @@ history startTime req db = requireAccount req db $ \accountId -> do
 -- is split across several end points, the challenge and the requesting user
 -- must be persisted.
 loginRequest :: ID -> Request -> Database -> IO Response
-loginRequest userId req db = do
+loginRequest userId req db = Prom.instrumentIO "loginRequest" $ do
     let log = "Endpoints.loginRequest"
     Log.infoM log "Beginning login."
     challenge <- randomBytes 64
@@ -159,7 +163,7 @@ randomBytes size = do
 -- given in HTTP headers to authenticate future requests. An entry is created in
 -- the Sessions table to associate the token with the corresponding user ID.
 loginRespond :: ID -> Request -> Database -> IO Response
-loginRespond challengeId req db = do
+loginRespond challengeId req db = Prom.instrumentIO "loginRespond" $ do
     let log = "Endpoints.loginRespond"
     Log.infoM log $ "Completing login for challenge " ++ show challengeId ++ "."
     signature <- lbs64ToLbs <$> strictRequestBody req
@@ -204,7 +208,8 @@ loginRespond challengeId req db = do
 
 -- | The endpoint will allow a user to login using a password.
 loginWithPassword :: Request -> Database -> IO Response
-loginWithPassword req db = asJson req $ \pwAccount -> do
+loginWithPassword req db = Prom.instrumentIO "loginWithPassword"
+                         $ asJson req $ \pwAccount -> do
     let log = "Endpoints.loginWithPassword"
     Log.infoM log "Obtaining user's hash."
     authToken <- runMaybeT $ do
@@ -226,7 +231,8 @@ loginWithPassword req db = asJson req $ \pwAccount -> do
 -- the MySQL database and returns in plaintext the newly created account's
 -- unique identifier. On failure it returns a 400.
 newRsaAccount :: Request -> Database -> IO Response
-newRsaAccount req db = asJson req $ \account -> do
+newRsaAccount req db = Prom.instrumentIO "newRsaAccount"
+                     $ asJson req $ \account -> do
     let log = "Endpoints.newRsaAccount"
     Log.infoM log "Processing account creation request."
     userId <- addRsaAccount account db
@@ -240,7 +246,8 @@ newRsaAccount req db = asJson req $ \account -> do
 -- the MySQL database and returns in plaintext the newly created account's
 -- unique identifier. On failure it returns a 400.
 newPWAccount :: Request -> Database -> IO Response
-newPWAccount req db = asJson req $ \account -> do
+newPWAccount req db = Prom.instrumentIO "newPWAccount"
+                    $ asJson req $ \account -> do
     let log = "Endpoints.newPWAccount"
     Log.infoM log "Processing account creation request."
     userId <- addPasswordAccount account db
@@ -253,7 +260,8 @@ newPWAccount req db = asJson req $ \account -> do
 -- it returns in plaintext the ID number of the account. On failure it returns
 -- a 404.
 findAccount :: T.Text -> Request -> Database -> IO Response
-findAccount name req db = requireAccount req db $ \_ -> do
+findAccount name req db = Prom.instrumentIO "findAccount"
+                        $ requireAccount req db $ \_ -> do
     let log = "Endpoints.newaccount"
     Log.infoM log $ "Looking up user ID for '" ++ T.unpack name ++ "'."
     userId <- accountIdForName name db
