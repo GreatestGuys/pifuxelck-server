@@ -15,6 +15,7 @@ echo ""
 echo -e "${BYellow}Launching new instance...${Color_Off}"
 cd /srv/pifuxelck/
 /usr/bin/nohup ./pifuxelck-server \
+  +RTS -T -RTS \
   --port 3000 \
   --mysql-host `dig db.everythingissauce.com +short | head -n 1` \
   --mysql-port 3306 \
